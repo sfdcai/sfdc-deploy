@@ -8,10 +8,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder",
-    "build:win": "vite build && electron-builder --win",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder",
+    "build": "npm run build:electron && vite build && electron-builder",
+    "build:win": "npm run build:electron && vite build && electron-builder --win",
+    "build:electron": "tsc electron/main.ts --outDir dist-electron --target ES2020 --module ES2020 --moduleResolution node --esModuleInterop && tsc electron/preload.ts --outDir dist-electron --target ES2020 --module ES2020 --moduleResolution node --esModuleInterop",
+    "electron:dev": "npm run build:electron && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "npm run build:electron && vite build && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
