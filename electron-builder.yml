@@ -1,0 +1,21 @@
+appId: com.salesforce.toolkit
+productName: Salesforce Toolkit
+directories:
+  buildResources: build
+  output: dist-app
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - node_modules/**/*
+  - "!node_modules/**/.cache"
+  - "!node_modules/**/test"
+  - "!node_modules/**/tests"
+win:
+  target: nsis
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Salesforce Toolkit
