@@ -9,6 +9,10 @@ export interface ElectronAPI {
   getSetting: (key: string) => Promise<any>;
   setSetting: (key: string, value: any) => Promise<void>;
   getAppInfo: () => Promise<{ name: string; version: string; author: string; linkedin: string }>;
+  logInfo: (category: string, message: string, details?: any) => Promise<void>;
+  logWarn: (category: string, message: string, details?: any) => Promise<void>;
+  logError: (category: string, message: string, details?: any) => Promise<void>;
+  logDebug: (category: string, message: string, details?: any) => Promise<void>;
 }
 
 declare global {

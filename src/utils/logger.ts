@@ -1,5 +1,3 @@
-import log from 'electron-log';
-
 export interface LogEntry {
   id: string;
   timestamp: Date;
@@ -14,12 +12,6 @@ export interface LogEntry {
 class Logger {
   private logs: LogEntry[] = [];
   private maxLogs = 1000;
-
-  constructor() {
-    // Configure electron-log for renderer process
-    // File transport is handled by the main process
-    log.transports.console.level = 'debug';
-  }
 
   private createLogEntry(
     level: LogEntry['level'],
@@ -51,25 +43,49 @@ class Logger {
   info(category: string, message: string, details?: any, userId?: string, orgId?: string) {
     const entry = this.createLogEntry('info', category, message, details, userId, orgId);
     this.addToMemory(entry);
-    log.info(`[${category}] ${message}`, details || '');
+    
+    // Use Electron API for logging if available
+    if (window.electronAPI?.logInfo) {
+      window.electronAPI.logInfo(category, message, details);
+    } else {
+      console.info(`[${category}] ${message}`, details || '');
+    }
   }
 
   warn(category: string, message: string, details?: any, userId?: string, orgId?: string) {
     const entry = this.createLogEntry('warn', category, message, details, userId, orgId);
     this.addToMemory(entry);
-    log.warn(`[${category}] ${message}`, details || '');
+    
+    // Use Electron API for logging if available
+    if (window.electronAPI?.logWarn) {
+      window.electronAPI.logWarn(category, message, details);
+    } else {
+      console.warn(`[${category}] ${message}`, details || '');
+    }
   }
 
   error(category: string, message: string, details?: any, userId?: string, orgId?: string) {
     const entry = this.createLogEntry('error', category, message, details, userId, orgId);
     this.addToMemory(entry);
-    log.error(`[${category}] ${message}`, details || '');
+    
+    // Use Electron API for logging if available
+    if (window.electronAPI?.logError) {
+      window.electronAPI.logError(category, message, details);
+    } else {
+      console.error(`[${category}] ${message}`, details || '');
+    }
   }
 
   debug(category: string, message: string, details?: any, userId?: string, orgId?: string) {
     const entry = this.createLogEntry('debug', category, message, details, userId, orgId);
     this.addToMemory(entry);
-    log.debug(`[${category}] ${message}`, details || '');
+    
+    // Use Electron API for logging if available
+    if (window.electronAPI?.logDebug) {
+      window.electronAPI.logDebug(category, message, details);
+    } else {
+      console.debug(`[${category}] ${message}`, details || '');
+    }
   }
 
   // Audit specific methods

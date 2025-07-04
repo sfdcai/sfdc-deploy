@@ -38,7 +38,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // App info
   getAppInfo: () => 
-    ipcRenderer.invoke('get-app-info')
+    ipcRenderer.invoke('get-app-info'),
+  
+  // Logging methods
+  logInfo: (category: string, message: string, details?: any) =>
+    ipcRenderer.invoke('log-info', category, message, details),
+  
+  logWarn: (category: string, message: string, details?: any) =>
+    ipcRenderer.invoke('log-warn', category, message, details),
+  
+  logError: (category: string, message: string, details?: any) =>
+    ipcRenderer.invoke('log-error', category, message, details),
+  
+  logDebug: (category: string, message: string, details?: any) =>
+    ipcRenderer.invoke('log-debug', category, message, details)
 });
 
 // Type definitions for the exposed API
@@ -53,6 +66,10 @@ export interface ElectronAPI {
   getSetting: (key: string) => Promise<any>;
   setSetting: (key: string, value: any) => Promise<void>;
   getAppInfo: () => Promise<{ name: string; version: string; author: string; linkedin: string }>;
+  logInfo: (category: string, message: string, details?: any) => Promise<void>;
+  logWarn: (category: string, message: string, details?: any) => Promise<void>;
+  logError: (category: string, message: string, details?: any) => Promise<void>;
+  logDebug: (category: string, message: string, details?: any) => Promise<void>;
 }
 
 declare global {

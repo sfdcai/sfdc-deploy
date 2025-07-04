@@ -40,7 +40,7 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(app.getAppPath(), 'dist-electron', 'preload.js')
     },
     titleBarStyle: 'default',
     icon: path.join(__dirname, '../assets/icon.png'),
@@ -266,6 +266,23 @@ ipcMain.handle('get-app-info', async () => {
   };
   log.debug('App info requested', appInfo);
   return appInfo;
+});
+
+// Logging IPC handlers for renderer process
+ipcMain.handle('log-info', async (event, category: string, message: string, details?: any) => {
+  log.info(`[${category}] ${message}`, details || '');
+});
+
+ipcMain.handle('log-warn', async (event, category: string, message: string, details?: any) => {
+  log.warn(`[${category}] ${message}`, details || '');
+});
+
+ipcMain.handle('log-error', async (event, category: string, message: string, details?: any) => {
+  log.error(`[${category}] ${message}`, details || '');
+});
+
+ipcMain.handle('log-debug', async (event, category: string, message: string, details?: any) => {
+  log.debug(`[${category}] ${message}`, details || '');
 });
 
 // Error handling
