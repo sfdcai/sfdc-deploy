@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { Download, FileText, Loader2, FolderOpen } from 'lucide-react';
+import { Download, FileText, Loader2, FolderOpen, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
+import { metadataService, OrgMetadata, MetadataType } from '../utils/metadataService';
+import { logger } from '../utils/logger';
 
 interface ManifestModalProps {
   orgs: any[];
@@ -12,7 +14,74 @@ interface ManifestModalProps {
 export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, projectDirectory }) => {
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [orgMetadata, setOrgMetadata] = useState<OrgMetadata | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [manifestType, setManifestType] = useState<'sample' | 'actual'>('actual');
   const { toast } = useToast();
+
+  const handleOrgSelect = (orgAlias: string) => {
+    setSelectedOrg(orgAlias);
+    setOrgMetadata(null);
+    setSelectedTypes([]);
+  };
+
+  const fetchOrgMetadata = async () => {
+    if (!selectedOrg) {
+      toast({
+        title: 'Error',
+        description: 'Please select an organization first',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      logger.auditAction('FETCH_ORG_METADATA', undefined, undefined, { orgAlias: selectedOrg });
+      const metadata = await metadataService.getOrgMetadata(selectedOrg);
+      setOrgMetadata(metadata);
+      
+      // Pre-select common types
+      const commonTypes = ['ApexClass', 'ApexTrigger', 'CustomObject', 'Layout', 'Flow'];
+      const availableCommonTypes = metadata.types
+        .filter(type => commonTypes.includes(type.name))
+        .map(type => type.name);
+      setSelectedTypes(availableCommonTypes);
+
+      toast({
+        title: 'Success',
+        description: `Retrieved metadata for ${metadata.types.length} types`,
+        variant: 'default'
+      });
+    } catch (error: any) {
+      logger.auditError('FETCH_ORG_METADATA', error, undefined, selectedOrg);
+      toast({
+        title: 'Error',
+        description: `Failed to retrieve metadata: ${error.message}`,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleTypeSelection = (typeName: string) => {
+    setSelectedTypes(prev => 
+      prev.includes(typeName)
+        ? prev.filter(t => t !== typeName)
+        : [...prev, typeName]
+    );
+  };
+
+  const selectAllTypes = () => {
+    if (orgMetadata) {
+      setSelectedTypes(orgMetadata.types.map(type => type.name));
+    }
+  };
+
+  const deselectAllTypes = () => {
+    setSelectedTypes([]);
+  };
 
   const generateManifest = async () => {
     if (!selectedOrg) {
@@ -26,11 +95,63 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
 
     setLoading(true);
     try {
-      // Generate a comprehensive package.xml manifest
-      const manifestContent = `<?xml version="1.0" encoding="UTF-8"?>
+      let manifestContent: string;
+
+      if (manifestType === 'sample') {
+        // Generate sample manifest with common types
+        manifestContent = generateSampleManifest();
+        logger.auditAction('GENERATE_SAMPLE_MANIFEST', undefined, undefined, { orgAlias: selectedOrg });
+      } else {
+        // Generate actual manifest from org metadata
+        if (!orgMetadata) {
+          toast({
+            title: 'Error',
+            description: 'Please fetch org metadata first',
+            variant: 'destructive'
+          });
+          return;
+        }
+
+        manifestContent = metadataService.generatePackageXml(orgMetadata, selectedTypes);
+        logger.auditAction('GENERATE_ACTUAL_MANIFEST', undefined, orgMetadata.orgId, { 
+          orgAlias: selectedOrg, 
+          selectedTypesCount: selectedTypes.length,
+          totalTypesCount: orgMetadata.types.length
+        });
+      }
+
+      const defaultFilename = projectDirectory 
+        ? `${projectDirectory}/package.xml`
+        : 'package.xml';
+
+      const filePath = await window.electronAPI.saveFile(manifestContent, defaultFilename);
+      
+      if (filePath) {
+        toast({
+          title: 'Success',
+          description: `Package.xml manifest generated successfully at ${filePath}`,
+          variant: 'default'
+        });
+        logger.info('MANIFEST', 'Manifest file saved successfully', { filePath, orgAlias: selectedOrg });
+      }
+    } catch (error: any) {
+      logger.auditError('GENERATE_MANIFEST', error, undefined, selectedOrg);
+      toast({
+        title: 'Error',
+        description: `Failed to generate manifest file: ${error.message}`,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateSampleManifest = (): string => {
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <!-- Generated by Salesforce Toolkit - Created by Amit Bhardwaj -->
     <!-- https://www.linkedin.com/in/salesforce-technical-architect/ -->
+    <!-- Sample manifest with common metadata types -->
     
     <!-- Apex Classes -->
     <types>
@@ -68,22 +189,10 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
         <name>Flow</name>
     </types>
     
-    <!-- Validation Rules -->
+    <!-- Lightning Web Components -->
     <types>
         <members>*</members>
-        <name>ValidationRule</name>
-    </types>
-    
-    <!-- Custom Tabs -->
-    <types>
-        <members>*</members>
-        <name>CustomTab</name>
-    </types>
-    
-    <!-- Custom Applications -->
-    <types>
-        <members>*</members>
-        <name>CustomApplication</name>
+        <name>LightningComponentBundle</name>
     </types>
     
     <!-- Permission Sets -->
@@ -92,46 +201,10 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
         <name>PermissionSet</name>
     </types>
     
-    <!-- Profiles -->
-    <types>
-        <members>*</members>
-        <name>Profile</name>
-    </types>
-    
-    <!-- Lightning Components -->
-    <types>
-        <members>*</members>
-        <name>LightningComponentBundle</name>
-    </types>
-    
-    <!-- Aura Components -->
-    <types>
-        <members>*</members>
-        <name>AuraDefinitionBundle</name>
-    </types>
-    
     <!-- Static Resources -->
     <types>
         <members>*</members>
         <name>StaticResource</name>
-    </types>
-    
-    <!-- Email Templates -->
-    <types>
-        <members>*</members>
-        <name>EmailTemplate</name>
-    </types>
-    
-    <!-- Reports -->
-    <types>
-        <members>*</members>
-        <name>Report</name>
-    </types>
-    
-    <!-- Dashboards -->
-    <types>
-        <members>*</members>
-        <name>Dashboard</name>
     </types>
     
     <!-- Custom Labels -->
@@ -140,67 +213,13 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
         <name>CustomLabel</name>
     </types>
     
-    <!-- Workflow Rules -->
-    <types>
-        <members>*</members>
-        <name>WorkflowRule</name>
-    </types>
-    
-    <!-- Process Builder -->
-    <types>
-        <members>*</members>
-        <name>WorkflowProcess</name>
-    </types>
-    
-    <!-- Custom Settings -->
-    <types>
-        <members>*</members>
-        <name>CustomSetting</name>
-    </types>
-    
-    <!-- Remote Site Settings -->
-    <types>
-        <members>*</members>
-        <name>RemoteSiteSetting</name>
-    </types>
-    
-    <!-- Connected Apps -->
-    <types>
-        <members>*</members>
-        <name>ConnectedApp</name>
-    </types>
-    
     <!-- API Version -->
     <version>58.0</version>
 </Package>`;
-
-      const defaultFilename = projectDirectory 
-        ? `${projectDirectory}/package.xml`
-        : 'package.xml';
-
-      const filePath = await window.electronAPI.saveFile(manifestContent, defaultFilename);
-      
-      if (filePath) {
-        toast({
-          title: 'Success',
-          description: `Package.xml manifest generated successfully at ${filePath}`,
-          variant: 'default'
-        });
-      }
-    } catch (error) {
-      console.error('Failed to generate manifest:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate manifest file',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Generate Manifest" size="md">
+    <Modal isOpen={true} onClose={onClose} title="Generate Manifest" size="xl">
       <div className="p-6">
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -208,7 +227,7 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
           </label>
           <select
             value={selectedOrg}
-            onChange={(e) => setSelectedOrg(e.target.value)}
+            onChange={(e) => handleOrgSelect(e.target.value)}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Choose an organization...</option>
@@ -219,6 +238,130 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
             ))}
           </select>
         </div>
+
+        {/* Manifest Type Selection */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-slate-700 mb-3">
+            Manifest Type
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                manifestType === 'sample' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+              onClick={() => setManifestType('sample')}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full border-2 ${
+                  manifestType === 'sample' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'
+                }`}>
+                  {manifestType === 'sample' && <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>}
+                </div>
+                <div>
+                  <h4 className="font-medium text-slate-900">Sample Manifest</h4>
+                  <p className="text-sm text-slate-600">Generate with common metadata types using wildcards</p>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                manifestType === 'actual' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+              onClick={() => setManifestType('actual')}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full border-2 ${
+                  manifestType === 'actual' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'
+                }`}>
+                  {manifestType === 'actual' && <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>}
+                </div>
+                <div>
+                  <h4 className="font-medium text-slate-900">Actual Org Metadata</h4>
+                  <p className="text-sm text-slate-600">Fetch and list actual components from the org</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fetch Metadata Button for Actual Type */}
+        {manifestType === 'actual' && !orgMetadata && (
+          <div className="mb-6">
+            <button
+              onClick={fetchOrgMetadata}
+              disabled={loading || !selectedOrg}
+              className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Fetching Metadata...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Fetch Org Metadata
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Metadata Type Selection */}
+        {manifestType === 'actual' && orgMetadata && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Select Metadata Types ({selectedTypes.length} of {orgMetadata.types.length} selected)
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllTypes}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={deselectAllTypes}
+                  className="text-sm text-slate-600 hover:text-slate-700"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-4 bg-slate-50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {orgMetadata.types.map((type) => (
+                  <div
+                    key={type.name}
+                    className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer transition-colors duration-200"
+                    onClick={() => toggleTypeSelection(type.name)}
+                  >
+                    {selectedTypes.includes(type.name) ? (
+                      <CheckSquare className="w-4 h-4 text-blue-500" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-slate-900 block truncate">
+                        {type.name}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {type.members.length} component{type.members.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {projectDirectory && (
           <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -237,8 +380,10 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
             <div>
               <h4 className="font-medium text-blue-900 mb-1">About Package.xml</h4>
               <p className="text-sm text-blue-700 mb-2">
-                The package.xml file defines which metadata components to retrieve from your org. 
-                This tool generates a comprehensive manifest including common metadata types.
+                {manifestType === 'sample' 
+                  ? 'Sample manifests use wildcards (*) to include all components of each type. This is useful for initial retrievals or when you want all metadata.'
+                  : 'Actual manifests list specific components found in your org. This provides precise control over what gets retrieved or deployed.'
+                }
               </p>
               <p className="text-xs text-blue-600">
                 Created by Amit Bhardwaj - Salesforce Technical Architect
@@ -249,7 +394,7 @@ export const ManifestModal: React.FC<ManifestModalProps> = ({ orgs, onClose, pro
 
         <button
           onClick={generateManifest}
-          disabled={loading || !selectedOrg}
+          disabled={loading || !selectedOrg || (manifestType === 'actual' && (!orgMetadata || selectedTypes.length === 0))}
           className="w-full bg-green-500 hover:bg-green-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
         >
           {loading ? (

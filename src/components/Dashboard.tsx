@@ -9,7 +9,8 @@ import {
   Shield,
   Terminal,
   Settings,
-  Info
+  Info,
+  FileSearch
 } from 'lucide-react';
 import { ModalType } from '../App';
 
@@ -76,6 +77,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       hoverColor: 'hover:bg-indigo-600'
     },
     {
+      id: 'logs',
+      title: 'Logs & Audit',
+      description: 'View application logs and audit trail',
+      icon: FileSearch,
+      color: 'bg-teal-500',
+      hoverColor: 'hover:bg-teal-600'
+    },
+    {
       id: 'setup',
       title: 'Setup Guide',
       description: 'Prerequisites and installation instructions',
@@ -131,7 +140,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Feature Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto mb-8">
         {features.map((feature) => {
           const Icon = feature.icon;
           return (

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Terminal, Play, Copy, BookOpen, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
+import { logger } from '../utils/logger';
 
 interface ShellModalProps {
   onClose: () => void;
@@ -85,6 +86,8 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
     setLoading(true);
     const timestamp = new Date();
     
+    logger.auditAction('EXECUTE_SHELL_COMMAND', undefined, undefined, { command });
+    
     try {
       let result;
       if (command.startsWith('sf ')) {
@@ -92,9 +95,13 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
         const parts = command.split(' ');
         const sfCommand = parts[1];
         const args = parts.slice(2);
+        
+        logger.auditSfCommand(sfCommand, args, undefined);
         result = await window.electronAPI.executeSfCommand(sfCommand, args);
+        logger.auditSfCommand(sfCommand, args, result);
       } else {
         // Execute general shell command
+        logger.info('SHELL', `Executing shell command: ${command}`);
         result = await window.electronAPI.executeShellCommand(command);
       }
 
@@ -106,13 +113,26 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
         timestamp,
         success: true
       }]);
+
+      logger.info('SHELL', 'Command executed successfully', { command, outputLength: output.length });
     } catch (error: any) {
+      const errorOutput = error.message || error.stderr || 'Command failed';
+      
       setHistory(prev => [...prev, {
         command,
-        output: error.message || error.stderr || 'Command failed',
+        output: errorOutput,
         timestamp,
         success: false
       }]);
+
+      if (command.startsWith('sf ')) {
+        const parts = command.split(' ');
+        const sfCommand = parts[1];
+        const args = parts.slice(2);
+        logger.auditSfCommandError(sfCommand, args, error);
+      } else {
+        logger.error('SHELL', 'Shell command failed', { command, error: error.message });
+      }
     } finally {
       setLoading(false);
       setCommand('');
@@ -135,6 +155,7 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
 
   const clearHistory = () => {
     setHistory([]);
+    logger.auditAction('CLEAR_SHELL_HISTORY');
   };
 
   return (

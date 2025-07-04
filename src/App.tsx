@@ -9,10 +9,12 @@ import { SystemCheckModal } from './components/SystemCheckModal';
 import { ShellModal } from './components/ShellModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
+import { LogsModal } from './components/LogsModal';
 import { Toaster } from './components/Toaster';
 import { ToastProvider } from './hooks/useToast';
+import { logger } from './utils/logger';
 
-export type ModalType = 'org-info' | 'manifest' | 'compare' | 'deploy' | 'setup' | 'system-check' | 'shell' | 'settings' | 'about' | null;
+export type ModalType = 'org-info' | 'manifest' | 'compare' | 'deploy' | 'setup' | 'system-check' | 'shell' | 'settings' | 'about' | 'logs' | null;
 
 function App() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -21,17 +23,26 @@ function App() {
   const [projectDirectory, setProjectDirectory] = useState<string>('');
 
   useEffect(() => {
-    loadOrgs();
-    loadSettings();
+    initializeApp();
   }, []);
+
+  const initializeApp = async () => {
+    logger.info('APP', 'Application starting up');
+    await loadOrgs();
+    await loadSettings();
+    logger.info('APP', 'Application initialization complete');
+  };
 
   const loadOrgs = async () => {
     try {
       setLoading(true);
+      logger.info('APP', 'Loading authenticated orgs');
       const result = await window.electronAPI.executeSfCommand('org', ['list', '--json']);
-      setOrgs(result.result || []);
-    } catch (error) {
-      console.error('Failed to load orgs:', error);
+      const orgsList = result.result || [];
+      setOrgs(orgsList);
+      logger.info('APP', `Successfully loaded ${orgsList.length} orgs`, { orgsCount: orgsList.length });
+    } catch (error: any) {
+      logger.error('APP', 'Failed to load orgs', error);
       setOrgs([]);
     } finally {
       setLoading(false);
@@ -40,22 +51,34 @@ function App() {
 
   const loadSettings = async () => {
     try {
+      logger.debug('APP', 'Loading application settings');
       const savedDirectory = await window.electronAPI.getSetting('projectDirectory');
       if (savedDirectory) {
         setProjectDirectory(savedDirectory);
+        logger.info('APP', 'Project directory loaded from settings', { projectDirectory: savedDirectory });
       }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
+    } catch (error: any) {
+      logger.error('APP', 'Failed to load settings', error);
     }
   };
 
-  const closeModal = () => setActiveModal(null);
+  const handleOpenModal = (modal: ModalType) => {
+    logger.auditAction('OPEN_MODAL', undefined, undefined, { modalType: modal });
+    setActiveModal(modal);
+  };
+
+  const closeModal = () => {
+    if (activeModal) {
+      logger.auditAction('CLOSE_MODAL', undefined, undefined, { modalType: activeModal });
+    }
+    setActiveModal(null);
+  };
 
   return (
     <ToastProvider>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <Dashboard 
-          onOpenModal={setActiveModal} 
+          onOpenModal={handleOpenModal} 
           orgsCount={orgs.length} 
           loading={loading}
           projectDirectory={projectDirectory}
@@ -99,6 +122,10 @@ function App() {
         
         {activeModal === 'about' && (
           <AboutModal onClose={closeModal} />
+        )}
+        
+        {activeModal === 'logs' && (
+          <LogsModal onClose={closeModal} />
         )}
         
         <Toaster />
