@@ -16,11 +16,9 @@ class Logger {
   private maxLogs = 1000;
 
   constructor() {
-    // Configure electron-log
-    log.transports.file.level = 'debug';
+    // Configure electron-log for renderer process
+    // File transport is handled by the main process
     log.transports.console.level = 'debug';
-    log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
-    log.transports.file.archiveLog = true;
   }
 
   private createLogEntry(
