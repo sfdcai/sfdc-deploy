@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import { CheckCircle, XCircle, Download, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Download, Loader2, ExternalLink, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
+import { logger } from '../utils/logger';
 
 interface SystemCheckModalProps {
   onClose: () => void;
@@ -14,6 +15,7 @@ interface SoftwareStatus {
   downloadUrl: string;
   description: string;
   required: boolean;
+  checking?: boolean;
 }
 
 export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) => {
@@ -60,31 +62,154 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
 
   const checkAllSoftware = async () => {
     setChecking(true);
+    logger.info('SYSTEM_CHECK', 'Starting system software check');
+    
+    // Initialize software list with checking state
+    const initialResults: SoftwareStatus[] = softwareList.map(sw => ({
+      ...sw,
+      installed: false,
+      version: null,
+      checking: true
+    }));
+    setSoftware(initialResults);
+
+    // Check if electronAPI is available
+    if (!window.electronAPI) {
+      logger.error('SYSTEM_CHECK', 'Electron API not available');
+      toast({
+        title: 'Error',
+        description: 'System check not available in browser mode',
+        variant: 'destructive'
+      });
+      setChecking(false);
+      return;
+    }
+
     const results: SoftwareStatus[] = [];
 
     for (const sw of softwareList) {
       try {
+        logger.debug('SYSTEM_CHECK', `Checking ${sw.name}`);
+        
+        // Update individual software checking state
+        setSoftware(prev => prev.map(s => 
+          s.name === sw.name ? { ...s, checking: true } : s
+        ));
+
         const result = await window.electronAPI.checkSoftwareInstalled(sw.name);
-        results.push({
+        
+        const softwareResult = {
           ...sw,
           installed: result.installed,
-          version: result.version
+          version: result.version,
+          checking: false
+        };
+
+        results.push(softwareResult);
+        
+        // Update individual software result immediately
+        setSoftware(prev => prev.map(s => 
+          s.name === sw.name ? softwareResult : s
+        ));
+
+        logger.info('SYSTEM_CHECK', `${sw.name} check complete`, { 
+          installed: result.installed, 
+          version: result.version 
         });
-      } catch (error) {
-        results.push({
+
+      } catch (error: any) {
+        logger.error('SYSTEM_CHECK', `Failed to check ${sw.name}`, error);
+        
+        const errorResult = {
           ...sw,
           installed: false,
-          version: null
-        });
+          version: null,
+          checking: false
+        };
+
+        results.push(errorResult);
+        
+        // Update individual software result immediately
+        setSoftware(prev => prev.map(s => 
+          s.name === sw.name ? errorResult : s
+        ));
       }
     }
 
-    setSoftware(results);
     setChecking(false);
+    logger.info('SYSTEM_CHECK', 'System software check complete', { 
+      totalChecked: results.length,
+      installed: results.filter(r => r.installed).length
+    });
   };
 
-  const installSoftware = (url: string) => {
-    window.electronAPI.openExternal(url);
+  const checkSingleSoftware = async (softwareName: string) => {
+    if (!window.electronAPI) {
+      toast({
+        title: 'Error',
+        description: 'System check not available in browser mode',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Set checking state for this software
+    setSoftware(prev => prev.map(s => 
+      s.name === softwareName ? { ...s, checking: true } : s
+    ));
+
+    try {
+      logger.debug('SYSTEM_CHECK', `Re-checking ${softwareName}`);
+      const result = await window.electronAPI.checkSoftwareInstalled(softwareName);
+      
+      setSoftware(prev => prev.map(s => 
+        s.name === softwareName ? { 
+          ...s, 
+          installed: result.installed, 
+          version: result.version,
+          checking: false 
+        } : s
+      ));
+
+      logger.info('SYSTEM_CHECK', `${softwareName} re-check complete`, { 
+        installed: result.installed, 
+        version: result.version 
+      });
+
+      if (result.installed) {
+        toast({
+          title: 'Success',
+          description: `${softwareName.toUpperCase()} is now detected as installed`,
+          variant: 'default'
+        });
+      }
+
+    } catch (error: any) {
+      logger.error('SYSTEM_CHECK', `Failed to re-check ${softwareName}`, error);
+      
+      setSoftware(prev => prev.map(s => 
+        s.name === softwareName ? { 
+          ...s, 
+          installed: false, 
+          version: null,
+          checking: false 
+        } : s
+      ));
+
+      toast({
+        title: 'Error',
+        description: `Failed to check ${softwareName.toUpperCase()}`,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const installSoftware = (url: string, name: string) => {
+    if (window.electronAPI) {
+      window.electronAPI.openExternal(url);
+      logger.auditAction('OPEN_DOWNLOAD_LINK', undefined, undefined, { software: name, url });
+    }
+    
     toast({
       title: 'Download Started',
       description: 'Please follow the installation instructions on the website',
@@ -143,7 +268,9 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
                 {requiredSoftware.map((sw) => (
                   <div key={sw.name} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
                     <div className="flex items-center gap-3">
-                      {sw.installed ? (
+                      {sw.checking ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      ) : sw.installed ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : (
                         <XCircle className="w-5 h-5 text-red-500" />
@@ -154,17 +281,30 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
                         {sw.installed && sw.version && (
                           <p className="text-xs text-green-600">Version: {sw.version}</p>
                         )}
+                        {sw.checking && (
+                          <p className="text-xs text-blue-600">Checking...</p>
+                        )}
                       </div>
                     </div>
-                    {!sw.installed && (
+                    <div className="flex gap-2">
+                      {!sw.installed && !sw.checking && (
+                        <button
+                          onClick={() => installSoftware(sw.downloadUrl, sw.name)}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                        >
+                          <Download className="w-4 h-4" />
+                          Install
+                        </button>
+                      )}
                       <button
-                        onClick={() => installSoftware(sw.downloadUrl)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                        onClick={() => checkSingleSoftware(sw.name)}
+                        disabled={sw.checking}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-500 text-white text-sm rounded-lg hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                       >
-                        <Download className="w-4 h-4" />
-                        Install
+                        <RefreshCw className={`w-4 h-4 ${sw.checking ? 'animate-spin' : ''}`} />
+                        Check
                       </button>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -177,7 +317,9 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
                 {optionalSoftware.map((sw) => (
                   <div key={sw.name} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg">
                     <div className="flex items-center gap-3">
-                      {sw.installed ? (
+                      {sw.checking ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      ) : sw.installed ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : (
                         <XCircle className="w-5 h-5 text-slate-400" />
@@ -188,30 +330,44 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
                         {sw.installed && sw.version && (
                           <p className="text-xs text-green-600">Version: {sw.version}</p>
                         )}
+                        {sw.checking && (
+                          <p className="text-xs text-blue-600">Checking...</p>
+                        )}
                       </div>
                     </div>
-                    {!sw.installed && (
+                    <div className="flex gap-2">
+                      {!sw.installed && !sw.checking && (
+                        <button
+                          onClick={() => installSoftware(sw.downloadUrl, sw.name)}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-slate-500 text-white text-sm rounded-lg hover:bg-slate-600 transition-colors duration-200"
+                        >
+                          <Download className="w-4 h-4" />
+                          Install
+                        </button>
+                      )}
                       <button
-                        onClick={() => installSoftware(sw.downloadUrl)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-500 text-white text-sm rounded-lg hover:bg-slate-600 transition-colors duration-200"
+                        onClick={() => checkSingleSoftware(sw.name)}
+                        disabled={sw.checking}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-500 text-white text-sm rounded-lg hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                       >
-                        <Download className="w-4 h-4" />
-                        Install
+                        <RefreshCw className={`w-4 h-4 ${sw.checking ? 'animate-spin' : ''}`} />
+                        Check
                       </button>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Refresh Button */}
+            {/* Refresh All Button */}
             <div className="flex justify-center pt-4">
               <button
                 onClick={checkAllSoftware}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                disabled={checking}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
               >
-                <Loader2 className="w-4 h-4" />
-                Refresh Check
+                <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
+                Refresh All Checks
               </button>
             </div>
 
@@ -219,12 +375,26 @@ export const SystemCheckModal: React.FC<SystemCheckModalProps> = ({ onClose }) =
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <h4 className="font-medium text-yellow-900 mb-2">Installation Notes</h4>
               <ul className="text-sm text-yellow-700 space-y-1">
-                <li>• After installing software, restart this application to detect changes</li>
-                <li>• Ensure installed software is added to your system PATH</li>
-                <li>• For Salesforce CLI, authenticate with your orgs using: <code>sf org login web</code></li>
+                <li>• After installing software, use the "Check" button to verify detection</li>
+                <li>• Ensure installed software is added to your system PATH environment variable</li>
+                <li>• For Salesforce CLI, authenticate with your orgs using: <code className="bg-yellow-100 px-1 rounded">sf org login web</code></li>
                 <li>• VS Code installation enables enhanced diff functionality for org comparisons</li>
+                <li>• If software shows as not installed but you know it is, try restarting your terminal or this application</li>
               </ul>
             </div>
+
+            {/* Troubleshooting */}
+            {!allRequiredInstalled && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Troubleshooting</h4>
+                <ul className="text-sm text-blue-700 space-y-1">
+                  <li>• If npm shows as not installed but Node.js is installed, restart this application</li>
+                  <li>• For SF CLI issues, try running <code className="bg-blue-100 px-1 rounded">sf --version</code> in your terminal</li>
+                  <li>• Make sure you're running this application as an administrator if needed</li>
+                  <li>• Check that your PATH environment variable includes the software installation directories</li>
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>

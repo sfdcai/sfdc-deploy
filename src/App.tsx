@@ -28,6 +28,14 @@ function App() {
 
   const initializeApp = async () => {
     logger.info('APP', 'Application starting up');
+    
+    // Check if electronAPI is available
+    if (!window.electronAPI) {
+      logger.error('APP', 'Electron API not available - running in browser mode');
+      setLoading(false);
+      return;
+    }
+
     await loadOrgs();
     await loadSettings();
     logger.info('APP', 'Application initialization complete');
@@ -37,12 +45,33 @@ function App() {
     try {
       setLoading(true);
       logger.info('APP', 'Loading authenticated orgs');
+      
+      if (!window.electronAPI) {
+        logger.warn('APP', 'Electron API not available, using empty orgs list');
+        setOrgs([]);
+        return;
+      }
+
       const result = await window.electronAPI.executeSfCommand('org', ['list', '--json']);
-      const orgsList = result.result || [];
+      
+      // Handle different response formats
+      let orgsList = [];
+      if (result && result.result) {
+        orgsList = Array.isArray(result.result) ? result.result : 
+                   result.result.nonScratchOrgs ? result.result.nonScratchOrgs : 
+                   result.result.scratchOrgs ? result.result.scratchOrgs : [];
+      } else if (result && Array.isArray(result)) {
+        orgsList = result;
+      }
+
       setOrgs(orgsList);
       logger.info('APP', `Successfully loaded ${orgsList.length} orgs`, { orgsCount: orgsList.length });
     } catch (error: any) {
       logger.error('APP', 'Failed to load orgs', error);
+      // Don't show error if SF CLI is not installed or no orgs are authenticated
+      if (error.message && error.message.includes('No authenticated orgs found')) {
+        logger.info('APP', 'No authenticated orgs found - this is normal for new installations');
+      }
       setOrgs([]);
     } finally {
       setLoading(false);
@@ -52,6 +81,12 @@ function App() {
   const loadSettings = async () => {
     try {
       logger.debug('APP', 'Loading application settings');
+      
+      if (!window.electronAPI) {
+        logger.warn('APP', 'Electron API not available, skipping settings load');
+        return;
+      }
+
       const savedDirectory = await window.electronAPI.getSetting('projectDirectory');
       if (savedDirectory) {
         setProjectDirectory(savedDirectory);
