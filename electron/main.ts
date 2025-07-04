@@ -7,13 +7,13 @@ import log from 'electron-log';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Initialize electron store for settings
-const store = new Store();
-
-// Configure electron-log
+// Configure electron-log early in the process
 log.transports.file.level = 'debug';
 log.transports.console.level = 'debug';
 log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
+
+// Initialize electron store for settings
+const store = new Store();
 
 // Enable live reload for development
 if (process.env.NODE_ENV === 'development') {
