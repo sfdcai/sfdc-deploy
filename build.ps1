@@ -28,7 +28,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Build the Electron main process
 Write-Host "Building Electron main process..." -ForegroundColor Yellow
-npx tsc electron/main.ts --outDir dist-electron --target ES2020 --module commonjs --moduleResolution node --esModuleInterop
+npx tsc electron/main.ts --outDir dist-electron --target ES2020 --module ES2020 --moduleResolution node --esModuleInterop
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Failed to build Electron main process" -ForegroundColor Red
@@ -37,7 +37,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Build the Electron preload script
 Write-Host "Building Electron preload script..." -ForegroundColor Yellow
-npx tsc electron/preload.ts --outDir dist-electron --target ES2020 --module commonjs --moduleResolution node --esModuleInterop
+npx tsc electron/preload.ts --outDir dist-electron --target ES2020 --module ES2020 --moduleResolution node --esModuleInterop
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Failed to build Electron preload script" -ForegroundColor Red
