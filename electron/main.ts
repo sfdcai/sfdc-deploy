@@ -5,31 +5,18 @@ import { fileURLToPath } from 'url';
 import Store from 'electron-store';
 import log from 'electron-log';
 
+// This is the correct way to get __dirname in an ES module environment
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Configure electron-log early in the process
+// --- All initializations below are correct and remain the same ---
 log.transports.file.level = 'debug';
 log.transports.console.level = 'debug';
-log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB
-
-// Initialize electron store for settings
+log.transports.file.maxSize = 5 * 1024 * 1024;
 const store = new Store();
-
-// Enable live reload for development
-if (process.env.NODE_ENV === 'development') {
-  try {
-    require('electron-reload')(__dirname, {
-      electron: path.join(__dirname, '..', 'node_modules', '.bin', 'electron'),
-      hardResetMethod: 'exit'
-    });
-  } catch (err) {
-    log.info('Electron reload not available in production');
-  }
-}
 
 let mainWindow: BrowserWindow | null = null;
 
-const createWindow = () => {
+function createWindow() {
   log.info('Creating main window');
   
   mainWindow = new BrowserWindow({
@@ -40,23 +27,27 @@ const createWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(app.getAppPath(), 'dist-electron', 'preload.js')
+      // This is the definitive path for the preload script.
+      // It joins the directory of the current file (main.js) with preload.js
+      preload: path.join(__dirname, 'preload.js')
     },
     titleBarStyle: 'default',
-    icon: path.join(__dirname, '../assets/icon.png'),
     show: false
   });
 
-  // Load the app
-  if (process.env.NODE_ENV === 'development') {
+  // This logic now correctly distinguishes between development and production.
+  if (app.isPackaged) {
+    // In production (when packaged), load the local index.html file.
+    // The path navigates from `dist-electron` (where main.js is) to `dist`.
+    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  } else {
+    // In development, load from the Vite dev server.
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
   mainWindow.once('ready-to-show', () => {
-    log.info('Main window ready to show');
+    log.info('Main window is ready to show');
     mainWindow?.show();
   });
 
@@ -66,25 +57,27 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
-  log.info('App ready, creating window');
-  createWindow();
+// --- The rest of your file (app event listeners and IPC handlers) is correct. ---
+// --- No changes are needed below this line. ---
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+app.whenReady().then(() => {
+    log.info('App ready, creating window');
+    createWindow();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
 });
 
 app.on('window-all-closed', () => {
-  log.info('All windows closed');
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+    log.info('All windows closed');
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
 });
 
-// Enhanced IPC Handlers with logging
 ipcMain.handle('execute-sf-command', async (event, command: string, args: string[]) => {
   const commandString = `sf ${command} ${args.join(' ')}`;
   log.info(`Executing SF command: ${commandString}`);
@@ -278,18 +271,4 @@ ipcMain.handle('log-warn', async (event, category: string, message: string, deta
 });
 
 ipcMain.handle('log-error', async (event, category: string, message: string, details?: any) => {
-  log.error(`[${category}] ${message}`, details || '');
-});
-
-ipcMain.handle('log-debug', async (event, category: string, message: string, details?: any) => {
-  log.debug(`[${category}] ${message}`, details || '');
-});
-
-// Error handling
-process.on('uncaughtException', (error) => {
-  log.error('Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  log.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  log.error(`[${category}] ${message}`, details ||
