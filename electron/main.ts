@@ -271,4 +271,9 @@ ipcMain.handle('log-warn', async (event, category: string, message: string, deta
 });
 
 ipcMain.handle('log-error', async (event, category: string, message: string, details?: any) => {
-  log.error(`[${category}] ${message}`, details ||
+  log.error(`[${category}] ${message}`, details || '');
+});
+
+ipcMain.handle('log-debug', async (event, category: string, message: string, details?: any) => {
+  log.debug(`[${category}] ${message}`, details || '');
+});
