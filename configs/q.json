@@ -1,10 +1,6 @@
 ﻿{
     "SystemInfo":  {
-                       "LastCheck":  {
-                                         "value":  "\/Date(1751792662903)\/",
-                                         "DisplayHint":  2,
-                                         "DateTime":  "06 July 2025 10:04:22"
-                                     },
+                       "LastCheck":  "2025-07-06T13:28:27.4178610+01:00",
                        "Software":  [
                                         {
                                             "Name":  "Salesforce CLI",

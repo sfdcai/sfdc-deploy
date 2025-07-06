@@ -14,7 +14,7 @@ function ProjectSelector({ onProjectSelect }: { onProjectSelect: (project: strin
         if (window.electronAPI) {
             window.electronAPI.getProjects().then(setProjects).catch(err => {
                 console.error("Failed to get projects:", err);
-                setProjects([]); // Set to empty array on error
+                setProjects([]);
             });
         }
     }, []);

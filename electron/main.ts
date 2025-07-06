@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { spawn } from 'child_process';
 
-// When "module" is "CommonJS" in tsconfig, __dirname is a global variable.
 const createWindow = () => {
     const mainWindow = new BrowserWindow({
         width: 1200, height: 800,
@@ -44,7 +43,7 @@ ipcMain.handle('execute-toolkit-command', (event, command, projectName, options)
     ];
 
     if (options?.Alias) psArgs.push('-Alias', options.Alias);
-    // Add other future parameters here
+    // Add other future parameters here as needed
 
     const ps = spawn('powershell.exe', psArgs);
 
