@@ -1,0 +1,32 @@
+﻿{
+    "SystemInfo":  {
+                       "LastCheck":  {
+                                         "value":  "\/Date(1751792662903)\/",
+                                         "DisplayHint":  2,
+                                         "DateTime":  "06 July 2025 10:04:22"
+                                     },
+                       "Software":  [
+                                        {
+                                            "Name":  "Salesforce CLI",
+                                            "Required":  true,
+                                            "Installed":  false,
+                                            "Version":  "N/A",
+                                            "WingetId":  "Salesforce.sf-cli"
+                                        },
+                                        {
+                                            "Name":  "Node.js",
+                                            "Required":  true,
+                                            "Installed":  true,
+                                            "Version":  "v22.17.0",
+                                            "WingetId":  "OpenJS.NodeJS"
+                                        },
+                                        {
+                                            "Name":  "Git",
+                                            "Required":  false,
+                                            "Installed":  true,
+                                            "Version":  "git version 2.39.1.windows.1",
+                                            "WingetId":  "Git.Git"
+                                        }
+                                    ]
+                   }
+}

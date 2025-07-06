@@ -86,37 +86,37 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
     setLoading(true);
     const timestamp = new Date();
     
-    logger.auditAction('EXECUTE_SHELL_COMMAND', undefined, undefined, { command });
+    logger.auditAction('EXECUTE_POWERSHELL_COMMAND', undefined, undefined, { command });
     
     try {
-      let result;
-      if (command.startsWith('sf ')) {
-        // Execute SF command
-        const parts = command.split(' ');
-        const sfCommand = parts[1];
-        const args = parts.slice(2);
-        
-        logger.auditSfCommand(sfCommand, args, undefined);
-        result = await window.electronAPI.executeSfCommand(sfCommand, args);
-        logger.auditSfCommand(sfCommand, args, result);
-      } else {
-        // Execute general shell command
-        logger.info('SHELL', `Executing shell command: ${command}`);
-        result = await window.electronAPI.executeShellCommand(command);
+      if (!window.electronAPI) {
+        throw new Error('PowerShell integration not available');
       }
 
-      const output = typeof result === 'object' ? JSON.stringify(result, null, 2) : result.stdout || result.toString();
+      const result = await window.electronAPI.executePowerShellCommand(command);
       
       setHistory(prev => [...prev, {
         command,
-        output,
+        output: result.output || result.error || 'Command completed',
         timestamp,
-        success: true
+        success: result.success
       }]);
 
-      logger.info('SHELL', 'Command executed successfully', { command, outputLength: output.length });
+      logger.info('SHELL', 'PowerShell command executed', { 
+        command, 
+        success: result.success,
+        outputLength: result.output?.length || 0 
+      });
+
+      if (!result.success && result.error) {
+        toast({
+          title: 'Command Failed',
+          description: 'Check the terminal output for details',
+          variant: 'destructive'
+        });
+      }
     } catch (error: any) {
-      const errorOutput = error.message || error.stderr || 'Command failed';
+      const errorOutput = error.message || 'Command failed';
       
       setHistory(prev => [...prev, {
         command,
@@ -125,14 +125,13 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
         success: false
       }]);
 
-      if (command.startsWith('sf ')) {
-        const parts = command.split(' ');
-        const sfCommand = parts[1];
-        const args = parts.slice(2);
-        logger.auditSfCommandError(sfCommand, args, error);
-      } else {
-        logger.error('SHELL', 'Shell command failed', { command, error: error.message });
-      }
+      logger.error('SHELL', 'PowerShell command failed', { command, error: error.message });
+      
+      toast({
+        title: 'Error',
+        description: 'Failed to execute command',
+        variant: 'destructive'
+      });
     } finally {
       setLoading(false);
       setCommand('');
@@ -159,7 +158,7 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Salesforce CLI Shell" size="xl">
+    <Modal isOpen={true} onClose={onClose} title="PowerShell Command Shell" size="xl">
       <div className="flex h-[600px]">
         {/* Command Reference Sidebar */}
         <div className={`${showCommands ? 'w-1/3' : 'w-0'} transition-all duration-300 overflow-hidden border-r border-slate-200`}>
@@ -200,7 +199,7 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
           <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4" />
-              <span className="text-sm font-medium">SF CLI Terminal</span>
+              <span className="text-sm font-medium">PowerShell Terminal</span>
             </div>
             <div className="flex gap-2">
               <button
@@ -226,15 +225,16 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
           >
             {history.length === 0 ? (
               <div className="text-slate-500">
-                <p>Salesforce CLI Shell - Ready for commands</p>
+                <p>PowerShell Command Shell - Ready for commands</p>
+                <p>Execute any PowerShell command including Salesforce CLI operations</p>
                 <p>Type 'sf --help' to get started or use the command reference panel</p>
-                <p className="text-xs mt-2 text-slate-600">Created by Amit Bhardwaj - Salesforce Technical Architect</p>
+                <p className="text-xs mt-2 text-slate-600">Enhanced with PowerShell integration by Amit Bhardwaj</p>
               </div>
             ) : (
               history.map((entry, index) => (
                 <div key={index} className="mb-4">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-blue-400">$</span>
+                    <span className="text-blue-400">PS&gt;</span>
                     <span className="text-white">{entry.command}</span>
                     <span className="text-slate-500 text-xs">
                       {entry.timestamp.toLocaleTimeString()}
@@ -249,7 +249,7 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
             {loading && (
               <div className="flex items-center gap-2 text-yellow-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Executing command...</span>
+                <span>Executing PowerShell command...</span>
               </div>
             )}
           </div>
@@ -258,13 +258,13 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
           <div className="p-4 border-t border-slate-200 bg-white">
             <div className="flex gap-2">
               <div className="flex-1 flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                <span className="text-slate-500">$</span>
+                <span className="text-slate-500">PS&gt;</span>
                 <input
                   type="text"
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && executeCommand()}
-                  placeholder="Enter SF command (e.g., sf org list)"
+                  placeholder="Enter PowerShell command (e.g., sf org list)"
                   className="flex-1 outline-none"
                   disabled={loading}
                 />
@@ -283,7 +283,7 @@ export const ShellModal: React.FC<ShellModalProps> = ({ onClose }) => {
               </button>
             </div>
             <div className="mt-2 text-xs text-slate-500 text-center">
-              Salesforce Toolkit by Amit Bhardwaj - Enhanced CLI Experience
+              PowerShell Integration - Salesforce Toolkit by Amit Bhardwaj
             </div>
           </div>
         </div>

@@ -1,7 +1,9 @@
 export interface ElectronAPI {
-  executeSfCommand: (command: string, args: string[]) => Promise<any>;
-  executeShellCommand: (command: string) => Promise<{ stdout: string; stderr: string }>;
+  executePowerShell: (script: string, args?: string[]) => Promise<{ success: boolean; output: string; error: string | null }>;
+  executePowerShellCommand: (command: string) => Promise<{ success: boolean; output: string; error: string | null }>;
+  getOrgsList: () => Promise<any[]>;
   checkSoftwareInstalled: (software: string) => Promise<{ installed: boolean; version: string | null }>;
+  getScriptsDirectory: () => Promise<string>;
   saveFile: (content: string, filename: string) => Promise<string | null>;
   openFile: () => Promise<{ path: string; content: string } | null>;
   selectDirectory: () => Promise<string | null>;

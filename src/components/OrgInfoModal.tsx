@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Building2, User, Globe, Code, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
 
 interface OrgInfoModalProps {
   orgs: any[];
@@ -11,16 +12,35 @@ export const OrgInfoModal: React.FC<OrgInfoModalProps> = ({ orgs, onClose }) => 
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [orgDetails, setOrgDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleOrgSelect = async (orgAlias: string) => {
     setSelectedOrg(orgAlias);
     setLoading(true);
     
     try {
-      const result = await window.electronAPI.executeSfCommand('org', ['display', '--target-org', orgAlias, '--json']);
-      setOrgDetails(result.result);
-    } catch (error) {
+      if (!window.electronAPI) {
+        throw new Error('PowerShell integration not available');
+      }
+
+      const scriptsDir = await window.electronAPI.getScriptsDirectory();
+      const scriptPath = `${scriptsDir}\\get-org-info.ps1`;
+      
+      const result = await window.electronAPI.executePowerShell(scriptPath, ['-OrgAlias', orgAlias, '-OutputFormat', 'json']);
+      
+      if (result.success) {
+        const orgInfo = JSON.parse(result.output);
+        setOrgDetails(orgInfo.result);
+      } else {
+        throw new Error(result.error || 'Failed to get org information');
+      }
+    } catch (error: any) {
       console.error('Failed to get org details:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to get org details: ${error.message}`,
+        variant: 'destructive'
+      });
       setOrgDetails(null);
     } finally {
       setLoading(false);
@@ -41,8 +61,8 @@ export const OrgInfoModal: React.FC<OrgInfoModalProps> = ({ orgs, onClose }) => 
           >
             <option value="">Choose an organization...</option>
             {orgs.map((org) => (
-              <option key={org.alias} value={org.alias}>
-                {org.alias} ({org.username})
+              <option key={org.alias || org.username} value={org.alias || org.username}>
+                {org.alias || org.username} ({org.username})
               </option>
             ))}
           </select>
@@ -51,7 +71,7 @@ export const OrgInfoModal: React.FC<OrgInfoModalProps> = ({ orgs, onClose }) => 
         {loading && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <span className="ml-2 text-slate-600">Loading org details...</span>
+            <span className="ml-2 text-slate-600">Loading org details via PowerShell...</span>
           </div>
         )}
 
@@ -103,6 +123,12 @@ export const OrgInfoModal: React.FC<OrgInfoModalProps> = ({ orgs, onClose }) => 
                   <p className="font-medium text-slate-900">{orgDetails.connectedStatus}</p>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-600 text-center">
+                Data retrieved via PowerShell integration - Salesforce Toolkit by Amit Bhardwaj
+              </p>
             </div>
           </div>
         )}
