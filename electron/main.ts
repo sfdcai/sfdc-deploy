@@ -165,7 +165,37 @@ ipcMain.handle('execute-sf-command', async (event, command, args) => {
 
 ipcMain.handle('get-orgs-list', async () => {
     try {
-        const result = await ipcMain.invoke('execute-sf-command', null, 'org', ['list']);
+        const result = await new Promise((resolve, reject) => {
+            const sf = spawn('sf', ['org', 'list', '--json']);
+            let output = '';
+            let error = '';
+            
+            sf.stdout.on('data', (data) => {
+                output += data.toString();
+            });
+            
+            sf.stderr.on('data', (data) => {
+                error += data.toString();
+            });
+            
+            sf.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const result = JSON.parse(output);
+                        resolve(result);
+                    } catch (parseError) {
+                        resolve({ result: [] });
+                    }
+                } else {
+                    resolve({ result: [] });
+                }
+            });
+            
+            sf.on('error', () => {
+                resolve({ result: [] });
+            });
+        }) as any;
+        
         return result.result || [];
     } catch (error) {
         console.error('Failed to get orgs list:', error);
@@ -266,13 +296,22 @@ ipcMain.handle('set-setting', async (event, key, value) => {
 
 // Application Info
 ipcMain.handle('get-app-info', async () => {
-    const packageJson = require('../package.json');
-    return {
-        name: packageJson.name,
-        version: packageJson.version,
-        author: packageJson.author,
-        linkedin: 'https://www.linkedin.com/in/salesforce-technical-architect/'
-    };
+    try {
+        const packageJson = require('../package.json');
+        return {
+            name: packageJson.name,
+            version: packageJson.version,
+            author: packageJson.author,
+            linkedin: 'https://www.linkedin.com/in/salesforce-technical-architect/'
+        };
+    } catch (error) {
+        return {
+            name: 'Salesforce Toolkit',
+            version: '1.0.0',
+            author: 'Amit Bhardwaj',
+            linkedin: 'https://www.linkedin.com/in/salesforce-technical-architect/'
+        };
+    }
 });
 
 // Logging
