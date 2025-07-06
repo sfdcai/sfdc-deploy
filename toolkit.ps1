@@ -36,8 +36,7 @@ function Add-NewOrg {
 
 function Show-SystemCheck {
     Write-Host "Running System Check..."
-    # This is a simplified version for the engine. The interactive parts are in the UI.
-    $softwareToCheck = @( @{ N="Salesforce CLI"; C="sf"; R=$true }, @{ N="Node.js"; C="node"; R=$true } )
+    $softwareToCheck = @( @{ N="Salesforce CLI"; C="sf" }, @{ N="Node.js"; C="node" } )
     foreach ($s in $softwareToCheck) {
         if (Get-Command $s.C -EA SilentlyContinue) { Write-Host "$($s.N): [FOUND]" }
         else { Write-Host "$($s.N): [NOT FOUND]" }
@@ -45,7 +44,7 @@ function Show-SystemCheck {
 }
 
 function Show-AuthorizedOrgs {
-    sf org list
+    sf org list --json
 }
 
 function Show-SfCommandHelp {
@@ -66,10 +65,5 @@ if (-not [string]::IsNullOrWhiteSpace($CommandToRun)) {
         Write-Error "Command '$CommandToRun' not found in toolkit."
     }
 } else {
-    # This branch is primarily for Get-ProjectList which doesn't need a project context
-    if ($CommandToRun -eq "Get-ProjectList") {
-        Get-ProjectList
-    } else {
-        Write-Error "No command specified. This script must be run with the -CommandToRun parameter."
-    }
+    Write-Error "No command specified. This script must be run with the -CommandToRun parameter."
 }
