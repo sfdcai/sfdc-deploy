@@ -5,6 +5,8 @@ import {
   Shield, Wrench, FileSearch, RefreshCw, Plus, User, LogOut
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
+import { AddOrgModal } from './components/AddOrgModal';
+import { SfCommandHelpModal } from './components/SfCommandHelpModal';
 
 // --- Project Selection Component ---
 function ProjectSelector({ onProjectSelect }: { onProjectSelect: (project: string) => void }) {
@@ -77,6 +79,8 @@ function AppContent({ project }: { project: string }) {
     const [orgs, setOrgs] = useState<any[]>([]);
     const [command, setCommand] = useState('');
     const terminalRef = useRef<HTMLDivElement>(null);
+    const [isAddOrgModalOpen, setIsAddOrgModalOpen] = useState(false);
+    const [isSfCommandHelpModalOpen, setIsSfCommandHelpModalOpen] = useState(false);
 
     useEffect(() => {
         if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -121,10 +125,11 @@ function AppContent({ project }: { project: string }) {
     };
     
     const handleAddOrg = () => {
-        const alias = prompt("Please enter a unique alias for the new org:");
-        if (alias && alias.trim()) {
-            executeCommand(`sf org login web --alias ${alias.trim()}`);
-        }
+        setIsAddOrgModalOpen(true);
+    };
+
+    const handleShowSfCommandHelp = () => {
+        setIsSfCommandHelpModalOpen(true);
     };
 
     const handleManualCommand = () => {
@@ -398,7 +403,7 @@ function AppContent({ project }: { project: string }) {
                                 Clear
                             </button>
                             <button
-                                onClick={() => executeCommand('sf --help')}
+                                onClick={handleShowSfCommandHelp}
                                 className="px-2 py-1 text-xs bg-blue-500 text-white hover:bg-blue-600 rounded"
                             >
                                 SF Help
@@ -456,6 +461,16 @@ function AppContent({ project }: { project: string }) {
             </div>
         </>
     );
+
+    {/* Modals */}
+    <AddOrgModal
+        isOpen={isAddOrgModalOpen}
+        onClose={() => setIsAddOrgModalOpen(false)}
+    />
+    <SfCommandHelpModal
+        isOpen={isSfCommandHelpModalOpen}
+        onClose={() => setIsSfCommandHelpModalOpen(false)}
+    />
 }
 
 // Main App component

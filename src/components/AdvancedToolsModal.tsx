@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { 
+import {
   Wrench, 
   Search, 
   Shield, 
@@ -19,6 +19,7 @@ interface AdvancedToolsModalProps {
   orgs: any[];
   onClose: () => void;
   projectDirectory: string;
+  project: string; // Add project prop
 }
 
 export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({ 
@@ -26,7 +27,8 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
   onClose, 
   projectDirectory 
 }) => {
-  const [activeTab, setActiveTab] = useState<'dependency' | 'permissions' | 'cache'>('dependency');
+  const { project } = props; // Destructure project prop
+  const [activeTab, setActiveTab] = useState<'dependency' | 'permissions' | 'cache'>('cache'); // Set default tab to cache
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const { toast } = useToast();
@@ -77,7 +79,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
   ];
 
   const runDependencyAnalysis = async () => {
-    if (!selectedOrg || !metadataType || !memberName) {
+    if (!selectedOrg || !metadataType || !memberName || loading) {
       toast({
         title: 'Error',
         description: 'Please fill in all required fields',
@@ -94,33 +96,29 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
     });
 
     try {
-      // Simulate dependency analysis
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Construct the sf command
+      const command = `sf project list metadata-dependencies --target-org ${selectedOrg} --json --metadata ${metadataType}:${memberName}`;
 
-      const mockResults = {
+      // Execute the command via PowerShell
+      const result = await window.electronAPI?.executePowerShellCommand(command);
+
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Command execution failed');
+      }
+
+      // Parse the JSON output
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(result.output);
+      } catch (parseError) {
+        throw new Error(`Failed to parse command output: ${parseError}`);
+      }
+
+      const dependencyResults = {
         component: `${metadataType}: ${memberName}`,
         org: selectedOrg,
-        dependencies: [
-          {
-            type: 'ApexClass',
-            name: 'AccountController',
-            relationship: 'References',
-            location: 'Line 45'
-          },
-          {
-            type: 'CustomField',
-            name: 'Account.CustomField__c',
-            relationship: 'Uses',
-            location: 'SOQL Query'
-          },
-          {
-            type: 'Layout',
-            name: 'Account-Account Layout',
-            relationship: 'Displays',
-            location: 'Field Section'
-          }
-        ],
-        dependents: [
+        dependencies: parsedResult.result.dependencies || [],
+        dependents: parsedResult.result.dependents || [],
           {
             type: 'Flow',
             name: 'AccountProcessFlow',
@@ -137,14 +135,13 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
         analyzedAt: new Date().toISOString()
       };
 
-      setResults(mockResults);
-      
+ setResults(dependencyResults);
+
       logger.auditAction('COMPLETE_DEPENDENCY_ANALYSIS', undefined, undefined, {
         orgAlias: selectedOrg,
-        dependenciesFound: mockResults.dependencies.length,
-        dependentsFound: mockResults.dependents.length
+ dependenciesFound: dependencyResults.dependencies.length,
+ dependentsFound: dependencyResults.dependents.length
       });
-
       toast({
         title: 'Analysis Complete',
         description: `Found ${mockResults.dependencies.length} dependencies and ${mockResults.dependents.length} dependents`,
@@ -163,7 +160,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
   };
 
   const analyzePermissions = async () => {
-    if (!sourcePath) {
+    if (!sourcePath || loading) {
       toast({
         title: 'Error',
         description: 'Please specify a source path',
@@ -218,7 +215,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
       };
 
       setPermissionResults(mockResults);
-      
+
       logger.auditAction('COMPLETE_PERMISSION_ANALYSIS', undefined, undefined, {
         sourcePath,
         filesAnalyzed: mockResults.summary.totalFiles,
@@ -243,24 +240,28 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
   };
 
   const clearCache = async () => {
-    setLoading(true);
+    if(loading) return;
     logger.auditAction('CLEAR_PROJECT_CACHE');
 
     try {
-      // Simulate cache clearing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await window.electronAPI?.clearProjectCache(project);
       
-      toast({
+      if (result?.success) {
+        toast({
         title: 'Success',
-        description: 'Project cache has been cleared successfully',
         variant: 'default'
       });
-      
+
       logger.info('CACHE', 'Project cache cleared successfully');
     } catch (error: any) {
       logger.auditError('CLEAR_CACHE', error);
       toast({
-        title: 'Error',
+        title: 'Cache Cleared',
+        description: `Project cache for "${project}" cleared successfully.`,
+        variant: 'default'
+        });
+      } else {
+        toast({
         description: 'Failed to clear cache',
         variant: 'destructive'
       });
@@ -281,6 +282,8 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
         description: 'Failed to select directory',
         variant: 'destructive'
       });
+    } finally {
+      setLoading(false); // Ensure loading is false even on failure
     }
   };
 
@@ -348,7 +351,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
 
       <button
         onClick={runDependencyAnalysis}
-        disabled={loading || !selectedOrg || !metadataType || !memberName}
+        disabled={loading || !selectedOrg || !metadataType || !memberName }
         className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
       >
         {loading ? (
@@ -367,7 +370,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
       {results && (
         <div className="bg-slate-50 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Analysis Results</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg p-4">
               <h4 className="font-medium text-orange-700 mb-3">Dependencies ({results.dependencies.length})</h4>
@@ -441,7 +444,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
 
       <button
         onClick={analyzePermissions}
-        disabled={loading || !sourcePath}
+        disabled={loading || !sourcePath }
         className="w-full bg-green-500 hover:bg-green-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
       >
         {loading ? (
@@ -460,7 +463,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
       {permissionResults && (
         <div className="bg-slate-50 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Permission Analysis Results</h3>
-          
+
           {/* Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-lg p-3 text-center">
@@ -596,7 +599,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
         <button
           onClick={clearCache}
           disabled={loading}
-          className="w-full bg-red-500 hover:bg-red-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+          className="w-full bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
@@ -616,7 +619,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
 
   return (
     <Modal isOpen={true} onClose={onClose} title="Advanced Tools" size="xl">
-      <div className="p-6">
+      <div className="p-6 flex flex-col h-full">
         {/* Tab Navigation */}
         <div className="flex space-x-1 mb-6 bg-slate-100 p-1 rounded-lg">
           {tabs.map((tab) => {
@@ -639,7 +642,7 @@ export const AdvancedToolsModal: React.FC<AdvancedToolsModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="min-h-[400px]">
+        <div className="flex-1 overflow-y-auto pr-4 -mr-4"> {/* Added flex-1 and overflow */}
           {activeTab === 'dependency' && renderDependencyTab()}
           {activeTab === 'permissions' && renderPermissionsTab()}
           {activeTab === 'cache' && renderCacheTab()}

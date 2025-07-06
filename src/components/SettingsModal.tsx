@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import { Folder, Save, RotateCcw } from 'lucide-react';
+import { Folder, Save, RotateCcw, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
 interface SettingsModalProps {
@@ -12,10 +12,40 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
   onClose, 
   projectDirectory, 
-  setProjectDirectory 
+  setProjectDirectory
 }) => {
   const [tempDirectory, setTempDirectory] = useState(projectDirectory);
+  const [settings, setSettings] = useState({
+    defaultOrgAlias: '',
+    autoRefreshOrgs: true, // Defaulting to true
+  });
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (window.electronAPI) {
+        try {
+          const fetchedDefaultOrgAlias = await window.electronAPI.getSetting('defaultOrgAlias');
+          const fetchedAutoRefreshOrgs = await window.electronAPI.getSetting('autoRefreshOrgs');
+          setSettings({
+            defaultOrgAlias: fetchedDefaultOrgAlias || '', // Use empty string if setting is null
+            autoRefreshOrgs: fetchedAutoRefreshOrgs !== undefined ? fetchedAutoRefreshOrgs : true, // Use default if setting is null/undefined
+          });
+        } catch (error) {
+          console.error('Failed to fetch settings:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load settings',
+            variant: 'destructive'
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    fetchSettings();
+  }, [toast]);
 
   const selectDirectory = async () => {
     try {
@@ -34,10 +64,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const saveSettings = async () => {
+    setLoading(true);
     try {
       await window.electronAPI.setSetting('projectDirectory', tempDirectory);
       setProjectDirectory(tempDirectory);
+
+      // Save additional settings
+      await window.electronAPI.setSetting('defaultOrgAlias', settings.defaultOrgAlias);
+      await window.electronAPI.setSetting('autoRefreshOrgs', settings.autoRefreshOrgs);
+
       toast({
+        title: 'Settings Saved',
+        description: 'Application settings have been updated.',
+        variant: 'default'
+      });
         title: 'Success',
         description: 'Settings saved successfully',
         variant: 'default'
@@ -46,11 +86,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     } catch (error) {
       console.error('Failed to save settings:', error);
       toast({
+        title: 'Error Saving Settings',
+        description: `Failed to save settings: ${error.message}`,
+        variant: 'destructive'
+      });
+      toast({
         title: 'Error',
         description: 'Failed to save settings',
         variant: 'destructive'
       });
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleSettingChange = (key: keyof typeof settings, value: any) => {
   };
 
   const resetSettings = () => {
@@ -60,6 +110,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <Modal isOpen={true} onClose={onClose} title="Settings" size="md">
       <div className="p-6">
+        {loading ? (
+           <div className="flex justify-center items-center h-32">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Project Directory */}
           <div>
@@ -88,7 +143,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Additional Settings */}
+            {/* General Settings */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-slate-900">General Settings</h3>
+               {/* Default Org Alias */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Default Org Alias
+                </label>
+                <input
+                  type="text"
+                  value={settings.defaultOrgAlias}
+                  onChange={(e) => handleSettingChange('defaultOrgAlias', e.target.value)}
+                  placeholder="Enter default org alias"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  The alias of the org to be pre-selected in org picklists.
+                </p>
+              </div>
+               {/* Auto Refresh Orgs */}
+              <div className="flex items-center">
+                 <input
+                  type="checkbox"
+                  checked={settings.autoRefreshOrgs}
+                  onChange={(e) => handleSettingChange('autoRefreshOrgs', e.target.checked)}
+                  id="autoRefreshOrgs"
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="autoRefreshOrgs" className="ml-2 block text-sm text-slate-900">
+                  Automatically refresh org list on startup
+                </label>
+              </div>
+            </div>
+
+           {/* Additional Info/Tips about Project Directory */}
           <div className="bg-slate-50 rounded-lg p-4">
             <h3 className="font-medium text-slate-900 mb-2">About Project Directory</h3>
             <ul className="text-sm text-slate-600 space-y-1">
@@ -117,12 +206,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
               <button
                 onClick={saveSettings}
+                disabled={loading}
                 className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors duration-200"
               >
-                <Save className="w-4 h-4" />
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save Settings
               </button>
             </div>
+          </div>
+        )} {/* End loading check */}
           </div>
         </div>
       </div>

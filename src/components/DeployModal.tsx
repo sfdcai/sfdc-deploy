@@ -1,3 +1,324 @@
+import React, { useState, useEffect } from 'react';
+import { Modal } from './Modal';
+import { Upload, Shield, CheckCircle, AlertTriangle, Loader2, FolderOpen } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+
+interface DeployModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+type DeployStep = 'config' | 'deploying' | 'result';
+
+interface Org {
+    alias: string;
+    username: string;
+    isDefaultDevHubUsername: boolean;
+    isDefaultScratchOrg: boolean;
+    instanceUrl: string;
+    accessToken: string;
+    orgId: string;
+    oauthClientId: string;
+    loginUrl: string;
+}
+
+export const DeployModal: React.FC<DeployModalProps> = ({ isOpen, onClose }) => {
+  const [currentStep, setCurrentStep] = useState<DeployStep>('config');
+  const [targetOrg, setTargetOrg] = useState<string>('');
+  const [manifestPath, setManifestPath] = useState<string>('');
+  const [sourcePath, setSourcePath] = useState<string>('');
+  const [testLevel, setTestLevel] = useState<string>('NoTestRun');
+  const [testsToRun, setTestsToRun] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [deploymentOutput, setDeploymentOutput] = useState<string | null>(null);
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const { toast } = useToast();
+
+    useEffect(() => {
+        if (isOpen) {
+            setCurrentStep('config');
+            setTargetOrg('');
+            setManifestPath('');
+            setSourcePath('');
+            setTestLevel('NoTestRun');
+            setTestsToRun('');
+            setDeploymentOutput(null);
+            setLoading(false);
+
+            // Fetch orgs when the modal opens
+            const fetchOrgs = async () => {
+                if (window.electronAPI) {
+                    try {
+                        const result = await window.electronAPI.showAuthorizedOrgs();
+                        if (result && result.result) {
+                            setOrgs(result.result);
+                        } else {
+                            setOrgs([]);
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch orgs:', error);
+                        setOrgs([]);
+                        toast({
+                            title: 'Error',
+                            description: 'Failed to load authorized orgs.',
+                            variant: 'destructive'
+                        });
+                    }
+                }
+            };
+            fetchOrgs();
+        }
+    }, [isOpen, toast]);
+
+  const handleBrowseManifest = async () => {
+    if (window.electronAPI) {
+      try {
+        const filePath = await window.electronAPI.selectFile(['xml']);
+        if (filePath) {
+          setManifestPath(filePath);
+          setSourcePath(''); // Clear source path if manifest is selected
+        }
+      } catch (error) {
+        console.error('Failed to select manifest file:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to select manifest file.',
+          variant: 'destructive'
+        });
+      }
+    }
+  };
+
+  const handleBrowseSource = async () => {
+    if (window.electronAPI) {
+      try {
+        const dirPath = await window.electronAPI.selectDirectory();
+        if (dirPath) {
+          setSourcePath(dirPath);
+          setManifestPath(''); // Clear manifest path if source is selected
+        }
+      } catch (error) {
+        console.error('Failed to select source directory:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to select source directory.',
+          variant: 'destructive'
+        });
+      }
+    }
+  };
+
+  const handleDeploy = async () => {
+    if (!targetOrg || (!manifestPath && !sourcePath)) {
+      toast({
+        title: 'Error',
+        description: 'Please select a target org and either a manifest or source path.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (testLevel === 'RunSpecifiedTests' && !testsToRun.trim()) {
+        toast({
+            title: 'Error',
+            description: 'Please specify tests to run for the selected test level.',
+            variant: 'destructive'
+          });
+          return;
+    }
+
+    setLoading(true);
+    setDeploymentOutput(null);
+    setCurrentStep('deploying');
+
+    try {
+      if (window.electronAPI && window.electronAPI.deployMetadata) {
+        const result = await window.electronAPI.deployMetadata({
+          manifestPath,
+          sourcePath,
+          targetOrg,
+          testLevel,
+          testsToRun: testLevel === 'RunSpecifiedTests' ? testsToRun.trim() : undefined,
+        });
+        setDeploymentOutput(result.output || result.error || 'Deployment process completed.');
+         if (result.success) {
+            toast({
+                title: 'Deployment Initiated',
+                description: 'Check the terminal output for details.',
+                variant: 'default'
+            });
+         } else {
+             toast({
+                title: 'Deployment Failed',
+                description: result.error || 'An unknown error occurred during deployment.',
+                variant: 'destructive'
+            });
+         }
+      } else {
+        setDeploymentOutput('Electron API not available for deployment.');
+        toast({
+            title: 'Error',
+            description: 'Deployment functionality is not available.',
+            variant: 'destructive'
+          });
+      }
+    } catch (error: any) {
+      setDeploymentOutput(`Error: ${error.message || 'An unexpected error occurred.'}`);
+       toast({
+        title: 'Error',
+        description: error.message || 'An unexpected error occurred during deployment.',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+      setCurrentStep('result');
+    }
+  };
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 'config':
+        return (
+          <>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Target Organization
+                </label>
+                <select
+                  value={targetOrg}
+                  onChange={(e) => setTargetOrg(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Choose target org...</option>
+                  {orgs.map((org) => (
+                    <option key={org.alias || org.username} value={org.alias || org.username}>
+                      {org.alias || org.username} ({org.username})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Package Source (Manifest or Directory)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manifestPath || sourcePath}
+                    readOnly
+                    placeholder="Select package.xml or source directory..."
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 cursor-pointer"
+                    onClick={manifestPath ? handleBrowseManifest : handleBrowseSource} // Allows re-selecting
+                  />
+                   <button
+                        onClick={handleBrowseManifest}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+                    >
+                        <Upload className="w-4 h-4" /> Manifest
+                    </button>
+                     <button
+                        onClick={handleBrowseSource}
+                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
+                    >
+                        <FolderOpen className="w-4 h-4" /> Source
+                    </button>
+                </div>
+                {(manifestPath || sourcePath) && (
+                    <p className="mt-1 text-xs text-slate-500">{manifestPath || sourcePath}</p>
+                )}
+              </div>
+
+               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Test Level
+                </label>
+                <select
+                  value={testLevel}
+                  onChange={(e) => setTestLevel(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="NoTestRun">NoTestRun (for scratch/sandbox)</option>
+                  <option value="RunSpecifiedTests">RunSpecifiedTests</option>
+                  <option value="RunLocalTests">RunLocalTests</option>
+                  <option value="RunAllTestsInOrg">RunAllTestsInOrg (for production/partial copy sandbox)</option>
+                </select>
+              </div>
+
+                {testLevel === 'RunSpecifiedTests' && (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Tests to Run (comma-separated)
+                        </label>
+                        <textarea
+                            value={testsToRun}
+                            onChange={(e) => setTestsToRun(e.target.value)}
+                            rows={3}
+                            placeholder="e.g., MyApexClassTest, AnotherApexTest"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        ></textarea>
+                    </div>
+                )}
+
+            </div>
+            <div className="border-t border-slate-200 px-6 py-4 flex justify-end">
+                 <button
+                    onClick={handleDeploy}
+                    disabled={loading || !targetOrg || (!manifestPath && !sourcePath) || (testLevel === 'RunSpecifiedTests' && !testsToRun.trim())}
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                >
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                    {loading ? 'Deploying...' : 'Deploy'}
+                </button>
+            </div>
+          </>
+        );
+
+      case 'deploying':
+           return (
+                <div className="p-6 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Deployment in Progress...</h3>
+                    <p className="text-sm text-slate-600">
+                        Please wait while the metadata is being deployed. Check the main application terminal for detailed output.
+                    </p>
+                </div>
+           );
+
+      case 'result':
+        return (
+          <div className="p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Deployment Result</h3>
+            {deploymentOutput ? (
+              <pre className="bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-lg overflow-auto max-h-60">
+                {deploymentOutput}
+              </pre>
+            ) : (
+                <p className="text-slate-600">No output received from the deployment process.</p>
+            )}
+            <div className="border-t border-slate-200 px-6 py-4 flex justify-end mt-4">
+                 <button
+                    onClick={onClose}
+                    className="bg-slate-500 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                    Close
+                </button>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Deploy Metadata" size="lg">
+      {renderStep()}
+    </Modal>
+  );
+};
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Upload, Shield, CheckCircle, AlertTriangle, Loader2, FolderOpen } from 'lucide-react';

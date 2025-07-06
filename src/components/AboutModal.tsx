@@ -3,7 +3,7 @@ import { Modal } from './Modal';
 import { ExternalLink, Heart, Code, Zap, Shield, Users } from 'lucide-react';
 
 interface AboutModalProps {
-  onClose: () => void;
+  isOpen: boolean;
 }
 
 export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
+  Plus,
   Building2, 
   FileText, 
   GitCompare, 
@@ -35,6 +36,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   project,
   onRefreshOrgs
 }) => {
+  const [authorizedOrgs, setAuthorizedOrgs] = useState<any[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
+  const [orgsError, setOrgsError] = useState<string | null>(null);
+
+
   const features = [
     {
       id: 'system-check',
@@ -119,6 +125,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   ];
 
+  const fetchAuthorizedOrgs = async () => {
+    setLoadingOrgs(true);
+    setOrgsError(null);
+    try {
+      const result = await window.electronAPI?.showAuthorizedOrgs();
+      if (result && result.result) {
+        setAuthorizedOrgs(result.result);
+      } else if (result && result.error) {
+        setOrgsError(result.error);
+      } else {
+        setAuthorizedOrgs([]);
+      }
+    } catch (error: any) {
+      setOrgsError(error.message || 'Failed to fetch authorized orgs.');
+      setAuthorizedOrgs([]);
+    } finally {
+      setLoadingOrgs(false);
+    }
+  };
+
   const categories = ['System', 'Orgs', 'Metadata', 'Deployment', 'Tools', 'Help'];
 
   return (
@@ -136,12 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                onClick={onRefreshOrgs}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors duration-200"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <button onClick={fetchAuthorizedOrgs} disabled={loadingOrgs} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors duration-200">
                 Refresh Orgs
               </button>
               <button
@@ -165,12 +186,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="font-medium">Project: {project}</span>
               </div>
-              {loading ? (
+              {loadingOrgs ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Loading orgs...</span>
                 </div>
-              ) : (
+              ) : authorizedOrgs.length > 0 ? (
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4" />
                   <span>{orgsCount} org{orgsCount !== 1 ? 's' : ''} connected</span>
@@ -243,6 +264,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h3>
           <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => onOpenModal('add-org')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors duration-200"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Org
+            </button>
             <button
               onClick={() => onOpenModal('about')}
               className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors duration-200"

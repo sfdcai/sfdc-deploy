@@ -18,7 +18,7 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({ onProjectSelec
     setLoading(true);
     try {
       if (window.electronAPI) {
-        const projectList = await window.electronAPI.getProjects();
+        const projectList = await window.electronAPI.getProjectList();
         setProjects(projectList || []);
       } else {
         setProjects([]);

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import { FileText, Download, Trash2, Filter, Search, RefreshCw } from 'lucide-react';
-import { logger, LogEntry } from '../utils/logger';
-import { useToast } from '../hooks/useToast';
+import { FileText, Download, Trash2, Filter, Search, RefreshCw, Loader2 } from 'lucide-react';
 
 interface LogsModalProps {
+  isOpen: boolean;
   onClose: () => void;
 }
+interface LogEntry { id: string; timestamp: string; level: string; category: string; message: string; details?: any; userId?: string; orgId?: string; }
 
 export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -15,11 +15,14 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadLogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+  
   useEffect(() => {
     filterLogs();
   }, [logs, levelFilter, categoryFilter, searchTerm]);
@@ -52,18 +55,28 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
     setFilteredLogs(filtered);
   };
 
-  const clearLogs = () => {
-    logger.clearLogs();
-    loadLogs();
-    toast({
-      title: 'Success',
-      description: 'All logs have been cleared',
-      variant: 'default'
-    });
+  const loadLogs = async () => {
+    if (!window.electronAPI) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const logsContent = await window.electronAPI.getApplicationLogs();
+      const parsedLogs: LogEntry[] = logsContent.split('\\n').filter(line => line.trim() !== '').map(line => JSON.parse(line));
+      setLogs(parsedLogs);
+    } catch (err: any) {
+      console.error('Failed to load logs:', err);
+      setError('Failed to load logs. Ensure the application has permission to access log files.');
+      setLogs([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  const clearLogs = () => {
+    // Clearing logs will be implemented later via an IPC call if needed.
+    toast.info("Clearing logs is not yet implemented.");
+  };
   const exportLogs = async () => {
-    try {
       const logsData = logger.exportLogs();
       const filename = `salesforce-toolkit-logs-${new Date().toISOString().split('T')[0]}.json`;
       
@@ -82,6 +95,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
         description: 'Failed to export logs',
         variant: 'destructive'
       });
+    }
     }
   };
 
@@ -105,7 +119,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Application Logs & Audit Trail" size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Application Logs & Audit Trail" size="xl">
       <div className="p-6">
         {/* Controls */}
         <div className="flex flex-wrap gap-4 mb-6">
@@ -204,9 +218,21 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
           </div>
 
           <div className="max-h-96 overflow-y-auto space-y-2">
-            {filteredLogs.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <span className="ml-3 text-slate-600">Loading logs...</span>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8 text-red-600">
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50 text-red-500" />
+                <p>{error}</p>
+              </div>
+            ) : filteredLogs.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" /> {/* Removed text-slate-500 as it's redundant with parent */}
+
+
                 <p>No logs found matching your criteria</p>
               </div>
             ) : (
