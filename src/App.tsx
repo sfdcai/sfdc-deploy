@@ -424,7 +424,7 @@ function AppContent({ project }: { project: string }) {
                     <div className="p-3 border-t border-slate-200 bg-white">
                         <div className="flex gap-2">
                             <div className="flex-1 flex items-center gap-2 px-3 py-2 border border-slate-300 rounded focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                                <span className="text-slate-500 text-sm">PS></span>
+                                <span className="text-slate-500 text-sm">PS</span>
                                 <input
                                     type="text"
                                     value={command}
