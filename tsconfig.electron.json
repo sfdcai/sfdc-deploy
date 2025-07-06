@@ -4,9 +4,13 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "strict": true,
     "outDir": "dist-electron",
-    "rootDir": "electron"
+    "rootDir": "electron",
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "include": ["electron/**/*"]
+  "include": ["electron/**/*"],
+  "exclude": ["node_modules", "dist", "dist-electron"]
 }
