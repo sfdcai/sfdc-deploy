@@ -1,15 +1,27 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import fs from 'fs/promises';
+import Store from 'electron-store';
+
+const store = new Store();
 
 const createWindow = () => {
     const mainWindow = new BrowserWindow({
-        width: 1200, height: 800,
+        width: 1400, 
+        height: 900,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false
-        }
+        },
+        icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+        titleBarStyle: 'default',
+        show: false
+    });
+
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
     });
 
     if (app.isPackaged) {
@@ -20,42 +32,324 @@ const createWindow = () => {
     }
 };
 
-const getScriptPath = () => app.isPackaged
-    ? path.join(process.resourcesPath, 'toolkit.ps1')
-    : path.resolve(app.getAppPath(), '..', 'toolkit.ps1');
+const getScriptPath = (scriptName: string) => {
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, scriptName);
+    }
+    return path.resolve(app.getAppPath(), '..', scriptName);
+};
 
-ipcMain.handle('get-projects', () => {
-    return new Promise((resolve, reject) => {
-        const ps = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-File', getScriptPath(), '-CommandToRun', 'Get-ProjectList']);
+const getScriptsDirectory = () => {
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'scripts');
+    }
+    return path.resolve(app.getAppPath(), '..', 'scripts');
+};
+
+// Project Management
+ipcMain.handle('get-projects', async () => {
+    try {
+        const configDir = path.join(app.getPath('userData'), 'configs');
+        await fs.mkdir(configDir, { recursive: true });
+        const files = await fs.readdir(configDir);
+        return files.filter(f => f.endsWith('.json')).map(f => f.replace('.json', ''));
+    } catch (error) {
+        console.error('Failed to get projects:', error);
+        return [];
+    }
+});
+
+// PowerShell Integration
+ipcMain.handle('execute-powershell', async (event, scriptPath, args = []) => {
+    return new Promise((resolve) => {
+        const psArgs = ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-File', scriptPath, ...args];
+        const ps = spawn('powershell.exe', psArgs);
+        
         let output = '';
-        ps.stdout.on('data', (data) => output += data.toString());
-        ps.stderr.on('data', (data) => console.error(`[PS Error - get-projects]: ${data}`));
-        ps.on('close', () => resolve(output.trim().split(/[\r\n]+/).filter(p => p)));
-        ps.on('error', reject);
+        let error = '';
+        
+        ps.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+        
+        ps.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        ps.on('close', (code) => {
+            resolve({
+                success: code === 0,
+                output: output.trim(),
+                error: error.trim() || null
+            });
+        });
+        
+        ps.on('error', (err) => {
+            resolve({
+                success: false,
+                output: '',
+                error: err.message
+            });
+        });
     });
 });
 
-ipcMain.handle('execute-toolkit-command', (event, command, projectName, options) => {
-    const psArgs = [
-        '-ExecutionPolicy', 'Bypass', '-NoProfile', '-File', getScriptPath(),
-        '-CommandToRun', command,
-        '-ProjectName', projectName
-    ];
+ipcMain.handle('execute-powershell-command', async (event, command) => {
+    return new Promise((resolve) => {
+        const ps = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', command]);
+        
+        let output = '';
+        let error = '';
+        
+        ps.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+        
+        ps.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        ps.on('close', (code) => {
+            resolve({
+                success: code === 0,
+                output: output.trim(),
+                error: error.trim() || null
+            });
+        });
+        
+        ps.on('error', (err) => {
+            resolve({
+                success: false,
+                output: '',
+                error: err.message
+            });
+        });
+    });
+});
 
-    if (options?.Alias) psArgs.push('-Alias', options.Alias);
-    // Add other future parameters here as needed
-
-    const ps = spawn('powershell.exe', psArgs);
-
-    ps.stdout.on('data', (data) => event.sender.send('toolkit-output', data.toString()));
-    ps.stderr.on('data', (data) => event.sender.send('toolkit-output', `ERROR: ${data.toString()}`));
-
+// Salesforce CLI Integration
+ipcMain.handle('execute-sf-command', async (event, command, args) => {
     return new Promise((resolve, reject) => {
-        ps.on('close', (code) => code === 0 ? resolve(true) : reject(new Error(`Script exited with code ${code}`)));
-        ps.on('error', reject);
+        const sfArgs = [command, ...args, '--json'];
+        const sf = spawn('sf', sfArgs);
+        
+        let output = '';
+        let error = '';
+        
+        sf.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+        
+        sf.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        sf.on('close', (code) => {
+            if (code === 0) {
+                try {
+                    const result = JSON.parse(output);
+                    resolve(result);
+                } catch (parseError) {
+                    resolve({ output, error });
+                }
+            } else {
+                reject(new Error(error || `Command failed with code ${code}`));
+            }
+        });
+        
+        sf.on('error', (err) => {
+            reject(err);
+        });
+    });
+});
+
+ipcMain.handle('get-orgs-list', async () => {
+    try {
+        const result = await ipcMain.invoke('execute-sf-command', null, 'org', ['list']);
+        return result.result || [];
+    } catch (error) {
+        console.error('Failed to get orgs list:', error);
+        return [];
+    }
+});
+
+// System Checks
+ipcMain.handle('check-software-installed', async (event, software) => {
+    return new Promise((resolve) => {
+        exec(`${software} --version`, (error, stdout) => {
+            if (error) {
+                resolve({ installed: false, version: null });
+            } else {
+                resolve({ installed: true, version: stdout.trim() });
+            }
+        });
+    });
+});
+
+ipcMain.handle('get-scripts-directory', async () => {
+    return getScriptsDirectory();
+});
+
+// File Operations
+ipcMain.handle('save-file', async (event, content, defaultFilename) => {
+    try {
+        const result = await dialog.showSaveDialog({
+            defaultPath: defaultFilename,
+            filters: [
+                { name: 'XML Files', extensions: ['xml'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+        
+        if (!result.canceled && result.filePath) {
+            await fs.writeFile(result.filePath, content, 'utf8');
+            return result.filePath;
+        }
+        return null;
+    } catch (error) {
+        console.error('Failed to save file:', error);
+        throw error;
+    }
+});
+
+ipcMain.handle('open-file', async () => {
+    try {
+        const result = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            filters: [
+                { name: 'XML Files', extensions: ['xml'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+        
+        if (!result.canceled && result.filePaths.length > 0) {
+            const filePath = result.filePaths[0];
+            const content = await fs.readFile(filePath, 'utf8');
+            return { path: filePath, content };
+        }
+        return null;
+    } catch (error) {
+        console.error('Failed to open file:', error);
+        throw error;
+    }
+});
+
+ipcMain.handle('select-directory', async () => {
+    try {
+        const result = await dialog.showOpenDialog({
+            properties: ['openDirectory']
+        });
+        
+        if (!result.canceled && result.filePaths.length > 0) {
+            return result.filePaths[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('Failed to select directory:', error);
+        throw error;
+    }
+});
+
+// External Operations
+ipcMain.handle('open-external', async (event, url) => {
+    await shell.openExternal(url);
+});
+
+// Settings Management
+ipcMain.handle('get-setting', async (event, key) => {
+    return store.get(key);
+});
+
+ipcMain.handle('set-setting', async (event, key, value) => {
+    store.set(key, value);
+});
+
+// Application Info
+ipcMain.handle('get-app-info', async () => {
+    const packageJson = require('../package.json');
+    return {
+        name: packageJson.name,
+        version: packageJson.version,
+        author: packageJson.author,
+        linkedin: 'https://www.linkedin.com/in/salesforce-technical-architect/'
+    };
+});
+
+// Logging
+const logToFile = async (level: string, category: string, message: string, details?: any) => {
+    try {
+        const logDir = path.join(app.getPath('userData'), 'logs');
+        await fs.mkdir(logDir, { recursive: true });
+        
+        const logFile = path.join(logDir, `toolkit-${new Date().toISOString().split('T')[0]}.log`);
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            level: level.toUpperCase(),
+            category,
+            message,
+            details
+        };
+        
+        await fs.appendFile(logFile, JSON.stringify(logEntry) + '\n');
+    } catch (error) {
+        console.error('Failed to write log:', error);
+    }
+};
+
+ipcMain.handle('log-info', async (event, category, message, details) => {
+    await logToFile('info', category, message, details);
+});
+
+ipcMain.handle('log-warn', async (event, category, message, details) => {
+    await logToFile('warn', category, message, details);
+});
+
+ipcMain.handle('log-error', async (event, category, message, details) => {
+    await logToFile('error', category, message, details);
+});
+
+ipcMain.handle('log-debug', async (event, category, message, details) => {
+    await logToFile('debug', category, message, details);
+});
+
+// Advanced Features
+ipcMain.handle('install-software', async (event, wingetId) => {
+    return new Promise((resolve) => {
+        const winget = spawn('winget', ['install', '--id', wingetId, '-e', '--accept-package-agreements', '--accept-source-agreements']);
+        
+        let output = '';
+        let error = '';
+        
+        winget.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+        
+        winget.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        winget.on('close', (code) => {
+            resolve({
+                success: code === 0,
+                output: output + error
+            });
+        });
+        
+        winget.on('error', (err) => {
+            resolve({
+                success: false,
+                output: err.message
+            });
+        });
     });
 });
 
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
