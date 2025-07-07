@@ -205,7 +205,7 @@ ipcMain.handle('get-orgs-list', async () => {
 
 ipcMain.handle('retrieve-metadata', async (event, { manifestPath, targetOrg }) => {
     try {
-        const scriptPath = getScriptPath('toolkit.ps1'); // Assuming toolkit.ps1 is available at the resourcesPath or parent dir
+        const scriptPath = getScriptPath('toolkit.ps1');
 
         let commandArgs = ['sf project retrieve start'];
         if (manifestPath) {
@@ -216,8 +216,38 @@ ipcMain.handle('retrieve-metadata', async (event, { manifestPath, targetOrg }) =
         }
 
         const command = commandArgs.join(' ');
-        // Assuming toolkit.ps1 handles the -CommandToRun parameter
-        return await ipcMain.handlers['execute-powershell'](event, scriptPath, ['-CommandToRun', command]);
+        
+        // Execute the PowerShell command directly
+        return new Promise((resolve) => {
+            const ps = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', command]);
+            
+            let output = '';
+            let error = '';
+            
+            ps.stdout.on('data', (data) => {
+                output += data.toString();
+            });
+            
+            ps.stderr.on('data', (data) => {
+                error += data.toString();
+            });
+            
+            ps.on('close', (code) => {
+                resolve({
+                    success: code === 0,
+                    output: output.trim(),
+                    error: error.trim() || null
+                });
+            });
+            
+            ps.on('error', (err) => {
+                resolve({
+                    success: false,
+                    output: '',
+                    error: err.message
+                });
+            });
+        });
     } catch (error: any) {
         return { success: false, output: '', error: error.message };
     }
@@ -225,8 +255,6 @@ ipcMain.handle('retrieve-metadata', async (event, { manifestPath, targetOrg }) =
 
 ipcMain.handle('deploy-metadata', async (event, { manifestPath, sourcePath, targetOrg, testLevel, testsToRun }) => {
     try {
-        const scriptPath = getScriptPath('toolkit.ps1'); // Assuming toolkit.ps1 is available at the resourcesPath or parent dir
-        
         let commandArgs = ['sf project deploy start'];
         if (manifestPath) {
             commandArgs.push(`--manifest "${manifestPath}"`);
@@ -240,11 +268,42 @@ ipcMain.handle('deploy-metadata', async (event, { manifestPath, sourcePath, targ
             commandArgs.push(`--test-level "${testLevel}"`);
         }
         if (testLevel === 'RunSpecifiedTests' && testsToRun) {
-            commandArgs.push(`--tests-to-run "${testsToRun}"`);
+            commandArgs.push(`--tests "${testsToRun}"`);
         }
         
         const command = commandArgs.join(' ');
-        return await ipcMain.handlers['execute-powershell'](event, scriptPath, ['-CommandToRun', command]);
+        
+        // Execute the PowerShell command directly
+        return new Promise((resolve) => {
+            const ps = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', command]);
+            
+            let output = '';
+            let error = '';
+            
+            ps.stdout.on('data', (data) => {
+                output += data.toString();
+            });
+            
+            ps.stderr.on('data', (data) => {
+                error += data.toString();
+            });
+            
+            ps.on('close', (code) => {
+                resolve({
+                    success: code === 0,
+                    output: output.trim(),
+                    error: error.trim() || null
+                });
+            });
+            
+            ps.on('error', (err) => {
+                resolve({
+                    success: false,
+                    output: '',
+                    error: err.message
+                });
+            });
+        });
     } catch (error: any) {
         return { success: false, output: '', error: error.message };
     }
