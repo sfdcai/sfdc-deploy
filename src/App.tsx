@@ -5,22 +5,48 @@ import {
   Shield, Wrench, FileSearch, RefreshCw, Plus, User, LogOut
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
+
+// Import all modal components
 import { AddOrgModal } from './components/AddOrgModal';
 import { SfCommandHelpModal } from './components/SfCommandHelpModal';
+import { SystemCheckModal } from './components/SystemCheckModal';
+import { OrgInfoModal } from './components/OrgInfoModal';
+import { ManifestModal } from './components/ManifestModal';
+import { CompareModal } from './components/CompareModal';
+import { DeployModal } from './components/DeployModal';
+import { ShellModal } from './components/ShellModal';
+import { AdvancedToolsModal } from './components/AdvancedToolsModal';
+import { LogsModal } from './components/LogsModal';
+import { SettingsModal } from './components/SettingsModal';
+import { SetupModal } from './components/SetupModal';
+import { AboutModal } from './components/AboutModal';
 
 // --- Project Selection Component ---
 function ProjectSelector({ onProjectSelect }: { onProjectSelect: (project: string) => void }) {
     const [projects, setProjects] = useState<string[] | null>(null);
     const [newProjectName, setNewProjectName] = useState('');
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (window.electronAPI) {
-            window.electronAPI.getProjects().then(setProjects).catch(err => {
-                console.error("Failed to get projects:", err);
-                setProjects([]);
-            });
-        }
+        loadProjects();
     }, []);
+
+    const loadProjects = async () => {
+        setLoading(true);
+        try {
+            if (window.electronAPI) {
+                const projectList = await window.electronAPI.getProjects();
+                setProjects(projectList || []);
+            } else {
+                setProjects([]);
+            }
+        } catch (error) {
+            console.error("Failed to get projects:", error);
+            setProjects([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleCreateProject = () => {
         if (newProjectName.trim()) {
@@ -28,43 +54,117 @@ function ProjectSelector({ onProjectSelect }: { onProjectSelect: (project: strin
         }
     };
 
-    if (projects === null) {
-        return <div className="flex items-center justify-center h-screen bg-slate-100"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+    const handleKeyPress = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleCreateProject();
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-blue-900">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 animate-spin text-blue-400 mx-auto mb-4" />
+                    <p className="text-white text-lg">Loading projects...</p>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="flex items-center justify-center h-screen bg-slate-900 text-white font-sans">
-            <div className="w-full max-w-md p-8 bg-slate-800 rounded-lg shadow-2xl">
-                <Folder className="w-12 h-12 mx-auto text-slate-500" />
-                <h1 className="text-2xl font-bold text-center mt-4">Select a Project</h1>
-                
-                {projects.length > 0 && (
-                    <div className="mt-6 space-y-2">
-                        {projects.map(p => (
-                            <button 
-                                key={p} 
-                                onClick={() => onProjectSelect(p)}
-                                className="w-full text-left p-3 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors"
+        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white font-sans">
+            <div className="w-full max-w-2xl p-8">
+                <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-white/20">
+                    {/* Header */}
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Folder className="w-8 h-8 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold mb-2">Salesforce Toolkit</h1>
+                        <p className="text-blue-200">Select or create a project to get started</p>
+                        <div className="mt-4 text-sm text-slate-300">
+                            Created by{' '}
+                            <button
+                                onClick={() => window.electronAPI?.openExternal('https://www.linkedin.com/in/salesforce-technical-architect/')}
+                                className="text-blue-400 hover:text-blue-300 underline"
                             >
-                                {p}
+                                Amit Bhardwaj
                             </button>
-                        ))}
+                            {' '}• Salesforce Technical Architect
+                        </div>
                     </div>
-                )}
 
-                <div className="mt-8 pt-6 border-t border-slate-700">
-                    <h2 className="text-lg font-semibold">Or Create a New One</h2>
-                    <div className="flex gap-2 mt-4">
-                        <input
-                            type="text"
-                            value={newProjectName}
-                            onChange={(e) => setNewProjectName(e.target.value)}
-                            placeholder="e.g., Project-X-Sandbox"
-                            className="flex-1 p-2 bg-slate-900 border border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <button onClick={handleCreateProject} className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-500 font-semibold">
-                            Create
-                        </button>
+                    {/* Existing Projects */}
+                    {projects && projects.length > 0 && (
+                        <div className="mb-8">
+                            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                                <Folder className="w-5 h-5" />
+                                Existing Projects
+                            </h2>
+                            <div className="grid gap-3">
+                                {projects.map((project) => (
+                                    <button
+                                        key={project}
+                                        onClick={() => onProjectSelect(project)}
+                                        className="w-full text-left p-4 bg-white/10 hover:bg-white/20 rounded-xl transition-all duration-200 border border-white/10 hover:border-white/30 group"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                                                <Folder className="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-medium text-white group-hover:text-blue-200 transition-colors">
+                                                    {project}
+                                                </h3>
+                                                <p className="text-sm text-slate-400">Click to open project</p>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Create New Project */}
+                    <div className="border-t border-white/20 pt-8">
+                        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <Plus className="w-5 h-5" />
+                            Create New Project
+                        </h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Project Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newProjectName}
+                                    onChange={(e) => setNewProjectName(e.target.value)}
+                                    onKeyPress={handleKeyPress}
+                                    placeholder="e.g., Project-X-Sandbox, Production-Deployment"
+                                    className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                />
+                            </div>
+                            <button
+                                onClick={handleCreateProject}
+                                disabled={!newProjectName.trim()}
+                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+                            >
+                                <Plus className="w-5 h-5" />
+                                Create Project
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Help Text */}
+                    <div className="mt-8 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                        <h3 className="font-medium text-blue-200 mb-2">About Projects</h3>
+                        <ul className="text-sm text-slate-300 space-y-1">
+                            <li>• Projects help organize your Salesforce development work</li>
+                            <li>• Each project maintains its own settings, cache, and logs</li>
+                            <li>• Use descriptive names like "Production-Deployment" or "Sandbox-Testing"</li>
+                            <li>• You can switch between projects anytime from the settings</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -72,15 +172,14 @@ function ProjectSelector({ onProjectSelect }: { onProjectSelect: (project: strin
     );
 }
 
-// --- Main Application Content ---
+// Main Application Content
 function AppContent({ project }: { project: string }) {
     const [output, setOutput] = useState(`Welcome to Project: ${project}!\nSelect an action from the left menu to begin.`);
     const [isLoading, setIsLoading] = useState(false);
     const [orgs, setOrgs] = useState<any[]>([]);
     const [command, setCommand] = useState('');
+    const [activeModal, setActiveModal] = useState<string | null>(null);
     const terminalRef = useRef<HTMLDivElement>(null);
-    const [isAddOrgModalOpen, setIsAddOrgModalOpen] = useState(false);
-    const [isSfCommandHelpModalOpen, setIsSfCommandHelpModalOpen] = useState(false);
 
     useEffect(() => {
         if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -106,7 +205,9 @@ function AppContent({ project }: { project: string }) {
         setOutput(prev => prev + `\n\n> ${cmd}\n`);
         
         try {
-            const result = await window.electronAPI.executePowerShellCommand(cmd);
+            // Fix PowerShell command separators - replace && with ;
+            const fixedCmd = cmd.replace(/&&/g, ';');
+            const result = await window.electronAPI.executePowerShellCommand(fixedCmd);
             setOutput(prev => prev + (result.output || result.error || 'Command completed'));
             
             if (cmd.includes('sf org')) {
@@ -120,18 +221,6 @@ function AppContent({ project }: { project: string }) {
         }
     };
 
-    const handleExecuteCommand = (command: string, options: any = {}) => {
-        executeCommand(command);
-    };
-    
-    const handleAddOrg = () => {
-        setIsAddOrgModalOpen(true);
-    };
-
-    const handleShowSfCommandHelp = () => {
-        setIsSfCommandHelpModalOpen(true);
-    };
-
     const handleManualCommand = () => {
         if (command.trim()) {
             executeCommand(command);
@@ -139,12 +228,20 @@ function AppContent({ project }: { project: string }) {
         }
     };
 
+    const openModal = (modalType: string) => {
+        setActiveModal(modalType);
+    };
+
+    const closeModal = () => {
+        setActiveModal(null);
+    };
+
     const menuItems = [
         { 
             id: 'system-check', 
             icon: CheckSquare, 
             label: 'System Check', 
-            action: () => executeCommand('sf --version && node --version && git --version'),
+            action: () => openModal('system-check'),
             category: 'System'
         },
         { 
@@ -158,116 +255,75 @@ function AppContent({ project }: { project: string }) {
             id: 'add-org', 
             icon: PlusCircle, 
             label: 'Add New Org', 
-            action: handleAddOrg,
+            action: () => openModal('add-org'),
             category: 'Orgs'
         },
         { 
             id: 'org-info', 
             icon: Info, 
             label: 'Org Info', 
-            action: () => {
-                if (orgs.length === 0) {
-                    toast.error("No orgs available. Please authenticate first.");
-                    return;
-                }
-                const orgAlias = orgs[0]?.alias || orgs[0]?.username;
-                if (orgAlias) {
-                    executeCommand(`sf org display --target-org ${orgAlias}`);
-                }
-            },
+            action: () => openModal('org-info'),
             category: 'Orgs'
         },
         { 
             id: 'generate-manifest', 
             icon: FileText, 
             label: 'Generate Manifest', 
-            action: () => {
-                const manifestContent = `<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-    <types>
-        <members>*</members>
-        <name>ApexClass</name>
-    </types>
-    <types>
-        <members>*</members>
-        <name>ApexTrigger</name>
-    </types>
-    <types>
-        <members>*</members>
-        <name>CustomObject</name>
-    </types>
-    <types>
-        <members>*</members>
-        <name>Layout</name>
-    </types>
-    <types>
-        <members>*</members>
-        <name>Flow</name>
-    </types>
-    <version>58.0</version>
-</Package>`;
-                
-                // Save manifest file
-                window.electronAPI.saveFile(manifestContent, 'package.xml').then(filePath => {
-                    if (filePath) {
-                        setOutput(prev => prev + `\n\n✅ Manifest generated: ${filePath}`);
-                        toast.success("Manifest file generated successfully");
-                    }
-                }).catch(err => {
-                    setOutput(prev => prev + `\n\n❌ Failed to save manifest: ${err.message}`);
-                    toast.error("Failed to save manifest file");
-                });
-            },
+            action: () => openModal('manifest'),
             category: 'Metadata'
         },
         { 
             id: 'compare-orgs', 
             icon: GitCompare, 
             label: 'Compare Orgs', 
-            action: () => {
-                if (orgs.length < 2) {
-                    toast.error("Need at least 2 orgs to compare");
-                    return;
-                }
-                setOutput(prev => prev + `\n\nOrg Comparison:\nSource: ${orgs[0]?.alias}\nTarget: ${orgs[1]?.alias}\nUse 'sf project retrieve start --manifest package.xml --target-org <org>' to retrieve metadata for comparison.`);
-            },
+            action: () => openModal('compare'),
             category: 'Metadata'
         },
         { 
             id: 'deploy', 
             icon: Upload, 
             label: 'Deploy Metadata', 
-            action: () => {
-                if (orgs.length === 0) {
-                    toast.error("No target org available");
-                    return;
-                }
-                const targetOrg = orgs[0]?.alias || orgs[0]?.username;
-                executeCommand(`sf project deploy validate --manifest package.xml --target-org ${targetOrg}`);
-            },
+            action: () => openModal('deploy'),
             category: 'Deployment'
+        },
+        { 
+            id: 'shell', 
+            icon: Terminal, 
+            label: 'SF Command Shell', 
+            action: () => openModal('shell'),
+            category: 'Tools'
         },
         { 
             id: 'advanced-tools', 
             icon: Wrench, 
             label: 'Advanced Tools', 
-            action: () => {
-                setOutput(prev => prev + `\n\nAdvanced Tools Available:\n- Dependency Analysis: sf project list metadata-dependencies\n- Permission Analysis: Analyze profiles and permission sets\n- Cache Management: Clear project cache and settings`);
-            },
+            action: () => openModal('advanced-tools'),
             category: 'Tools'
         },
         { 
             id: 'logs', 
             icon: FileSearch, 
             label: 'View Logs', 
-            action: () => {
-                setOutput(prev => prev + `\n\nApplication logs and audit trail available in the logs section.`);
-            },
+            action: () => openModal('logs'),
             category: 'System'
+        },
+        { 
+            id: 'settings', 
+            icon: Settings, 
+            label: 'Settings', 
+            action: () => openModal('settings'),
+            category: 'System'
+        },
+        { 
+            id: 'setup', 
+            icon: BookOpen, 
+            label: 'Setup Guide', 
+            action: () => openModal('setup'),
+            category: 'Help'
         }
     ];
 
-    const categories = ['System', 'Orgs', 'Metadata', 'Deployment', 'Tools'];
+    const categories = ['System', 'Orgs', 'Metadata', 'Deployment', 'Tools', 'Help'];
 
     return (
         <>
@@ -297,7 +353,7 @@ function AppContent({ project }: { project: string }) {
                         <h3 className="text-xs font-semibold text-slate-700 mb-2">Quick Org Actions</h3>
                         <div className="flex gap-1">
                             <button
-                                onClick={handleAddOrg}
+                                onClick={() => openModal('add-org')}
                                 className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                             >
                                 <Plus className="w-3 h-3" />
@@ -403,7 +459,7 @@ function AppContent({ project }: { project: string }) {
                                 Clear
                             </button>
                             <button
-                                onClick={handleShowSfCommandHelp}
+                                onClick={() => openModal('shell')}
                                 className="px-2 py-1 text-xs bg-blue-500 text-white hover:bg-blue-600 rounded"
                             >
                                 SF Help
@@ -461,14 +517,80 @@ function AppContent({ project }: { project: string }) {
             </div>
 
             {/* Modals */}
-            <AddOrgModal
-                isOpen={isAddOrgModalOpen}
-                onClose={() => setIsAddOrgModalOpen(false)}
-            />
-            <SfCommandHelpModal
-                isOpen={isSfCommandHelpModalOpen}
-                onClose={() => setIsSfCommandHelpModalOpen(false)}
-            />
+            {activeModal === 'add-org' && (
+                <AddOrgModal
+                    isOpen={true}
+                    onClose={closeModal}
+                    onOrgAdded={loadOrgs}
+                />
+            )}
+            {activeModal === 'system-check' && (
+                <SystemCheckModal
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'org-info' && (
+                <OrgInfoModal
+                    orgs={orgs}
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'manifest' && (
+                <ManifestModal
+                    orgs={orgs}
+                    onClose={closeModal}
+                    projectDirectory=""
+                />
+            )}
+            {activeModal === 'compare' && (
+                <CompareModal
+                    orgs={orgs}
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'deploy' && (
+                <DeployModal
+                    isOpen={true}
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'shell' && (
+                <ShellModal
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'advanced-tools' && (
+                <AdvancedToolsModal
+                    orgs={orgs}
+                    onClose={closeModal}
+                    projectDirectory=""
+                    project={project}
+                />
+            )}
+            {activeModal === 'logs' && (
+                <LogsModal
+                    isOpen={true}
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'settings' && (
+                <SettingsModal
+                    onClose={closeModal}
+                    projectDirectory=""
+                    setProjectDirectory={() => {}}
+                />
+            )}
+            {activeModal === 'setup' && (
+                <SetupModal
+                    onClose={closeModal}
+                />
+            )}
+            {activeModal === 'about' && (
+                <AboutModal
+                    isOpen={true}
+                    onClose={closeModal}
+                />
+            )}
         </>
     );
 }

@@ -22,18 +22,16 @@ export const AddOrgModal: React.FC<AddOrgModalProps> = ({ isOpen, onClose, onOrg
     setLoading(true);
     setResult(null);
     try {
-      if (window.electronAPI?.addNewOrg) {
-        // Assuming addNewOrg returns a result similar to execute-powershell
-        const response = await window.electronAPI.addNewOrg(alias);
-        if (response.success) {
-          setResult({ success: true, message: `Successfully authorized org with alias: ${alias}` });
-          setAlias(''); // Clear input on success
-          onOrgAdded(); // Refresh org list
-        } else {
-          setResult({ success: false, message: `Failed to authorize org: ${response.error || response.output}` });
-        }
+      // Execute the sf org login command
+      const command = `sf org login web --alias "${alias}"`;
+      const response = await window.electronAPI.executePowerShellCommand(command);
+      
+      if (response.success) {
+        setResult({ success: true, message: `Successfully authorized org with alias: ${alias}` });
+        setAlias(''); // Clear input on success
+        onOrgAdded(); // Refresh org list
       } else {
-        setResult({ success: false, message: 'Electron API not available.' });
+        setResult({ success: false, message: `Failed to authorize org: ${response.error || response.output}` });
       }
     } catch (error: any) {
       setResult({ success: false, message: `An error occurred: ${error.message}` });
