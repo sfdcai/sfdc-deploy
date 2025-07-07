@@ -459,18 +459,18 @@ function AppContent({ project }: { project: string }) {
                     </div>
                 </main>
             </div>
+
+            {/* Modals */}
+            <AddOrgModal
+                isOpen={isAddOrgModalOpen}
+                onClose={() => setIsAddOrgModalOpen(false)}
+            />
+            <SfCommandHelpModal
+                isOpen={isSfCommandHelpModalOpen}
+                onClose={() => setIsSfCommandHelpModalOpen(false)}
+            />
         </>
     );
-
-    {/* Modals */}
-    <AddOrgModal
-        isOpen={isAddOrgModalOpen}
-        onClose={() => setIsAddOrgModalOpen(false)}
-    />
-    <SfCommandHelpModal
-        isOpen={isSfCommandHelpModalOpen}
-        onClose={() => setIsSfCommandHelpModalOpen(false)}
-    />
 }
 
 // Main App component
