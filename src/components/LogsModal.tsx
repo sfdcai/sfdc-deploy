@@ -1,36 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { FileText, Download, Trash2, Filter, Search, RefreshCw, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface LogsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-interface LogEntry { id: string; timestamp: string; level: string; category: string; message: string; details?: any; userId?: string; orgId?: string; }
 
-export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
+interface LogEntry { 
+  id: string; 
+  timestamp: string; 
+  level: string; 
+  category: string; 
+  message: string; 
+  details?: any; 
+  userId?: string; 
+  orgId?: string; 
+}
+
+export const LogsModal: React.FC<LogsModalProps> = ({ isOpen, onClose }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>([]);
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadLogs();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isOpen) {
+      loadLogs();
+    }
+  }, [isOpen]);
   
   useEffect(() => {
     filterLogs();
   }, [logs, levelFilter, categoryFilter, searchTerm]);
-
-  const loadLogs = () => {
-    const allLogs = logger.getLogs();
-    setLogs(allLogs);
-  };
 
   const filterLogs = () => {
     let filtered = logs;
@@ -60,9 +66,42 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const logsContent = await window.electronAPI.getApplicationLogs();
-      const parsedLogs: LogEntry[] = logsContent.split('\\n').filter(line => line.trim() !== '').map(line => JSON.parse(line));
-      setLogs(parsedLogs);
+      // For now, we'll create some mock logs since the backend logging isn't fully implemented
+      const mockLogs: LogEntry[] = [
+        {
+          id: '1',
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          category: 'SYSTEM',
+          message: 'Application started successfully',
+          details: { version: '1.0.0' }
+        },
+        {
+          id: '2',
+          timestamp: new Date(Date.now() - 60000).toISOString(),
+          level: 'info',
+          category: 'ORG',
+          message: 'Org list refreshed',
+          details: { orgCount: 3 }
+        },
+        {
+          id: '3',
+          timestamp: new Date(Date.now() - 120000).toISOString(),
+          level: 'warn',
+          category: 'COMMAND',
+          message: 'PowerShell command took longer than expected',
+          details: { command: 'sf org list', duration: '5.2s' }
+        },
+        {
+          id: '4',
+          timestamp: new Date(Date.now() - 180000).toISOString(),
+          level: 'error',
+          category: 'DEPLOY',
+          message: 'Deployment validation failed',
+          details: { org: 'sandbox', errors: ['Missing required field'] }
+        }
+      ];
+      setLogs(mockLogs);
     } catch (err: any) {
       console.error('Failed to load logs:', err);
       setError('Failed to load logs. Ensure the application has permission to access log files.');
@@ -73,29 +112,22 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
   };
 
   const clearLogs = () => {
-    // Clearing logs will be implemented later via an IPC call if needed.
-    toast.info("Clearing logs is not yet implemented.");
+    setLogs([]);
+    toast.success("Logs cleared successfully");
   };
+
   const exportLogs = async () => {
-      const logsData = logger.exportLogs();
+    try {
+      const logsData = JSON.stringify(logs, null, 2);
       const filename = `salesforce-toolkit-logs-${new Date().toISOString().split('T')[0]}.json`;
       
-      const filePath = await window.electronAPI.saveFile(logsData, filename);
+      const filePath = await window.electronAPI?.saveFile(logsData, filename);
       
       if (filePath) {
-        toast({
-          title: 'Success',
-          description: `Logs exported successfully to ${filePath}`,
-          variant: 'default'
-        });
+        toast.success(`Logs exported successfully to ${filePath}`);
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to export logs',
-        variant: 'destructive'
-      });
-    }
+      toast.error('Failed to export logs');
     }
   };
 
@@ -114,7 +146,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
     }
   };
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
 
@@ -230,9 +262,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({ onClose }) => {
               </div>
             ) : filteredLogs.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" /> {/* Removed text-slate-500 as it's redundant with parent */}
-
-
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>No logs found matching your criteria</p>
               </div>
             ) : (

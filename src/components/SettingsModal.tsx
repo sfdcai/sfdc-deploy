@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Folder, Save, RotateCcw, Loader2 } from 'lucide-react';
-import { useToast } from '../hooks/useToast';
+import { toast } from 'sonner';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -17,10 +17,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [tempDirectory, setTempDirectory] = useState(projectDirectory);
   const [settings, setSettings] = useState({
     defaultOrgAlias: '',
-    autoRefreshOrgs: true, // Defaulting to true
+    autoRefreshOrgs: true,
   });
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -29,82 +28,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           const fetchedDefaultOrgAlias = await window.electronAPI.getSetting('defaultOrgAlias');
           const fetchedAutoRefreshOrgs = await window.electronAPI.getSetting('autoRefreshOrgs');
           setSettings({
-            defaultOrgAlias: fetchedDefaultOrgAlias || '', // Use empty string if setting is null
-            autoRefreshOrgs: fetchedAutoRefreshOrgs !== undefined ? fetchedAutoRefreshOrgs : true, // Use default if setting is null/undefined
+            defaultOrgAlias: fetchedDefaultOrgAlias || '',
+            autoRefreshOrgs: fetchedAutoRefreshOrgs !== undefined ? fetchedAutoRefreshOrgs : true,
           });
         } catch (error) {
           console.error('Failed to fetch settings:', error);
-          toast({
-            title: 'Error',
-            description: 'Failed to load settings',
-            variant: 'destructive'
-          });
+          toast.error('Failed to load settings');
         } finally {
           setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
     };
     fetchSettings();
-  }, [toast]);
+  }, []);
 
   const selectDirectory = async () => {
     try {
-      const directory = await window.electronAPI.selectDirectory();
+      const directory = await window.electronAPI?.selectDirectory();
       if (directory) {
         setTempDirectory(directory);
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to select directory',
-        variant: 'destructive'
-      });
+      toast.error('Failed to select directory');
     }
   };
 
   const saveSettings = async () => {
     setLoading(true);
     try {
-      await window.electronAPI.setSetting('projectDirectory', tempDirectory);
+      await window.electronAPI?.setSetting('projectDirectory', tempDirectory);
       setProjectDirectory(tempDirectory);
 
       // Save additional settings
-      await window.electronAPI.setSetting('defaultOrgAlias', settings.defaultOrgAlias);
-      await window.electronAPI.setSetting('autoRefreshOrgs', settings.autoRefreshOrgs);
+      await window.electronAPI?.setSetting('defaultOrgAlias', settings.defaultOrgAlias);
+      await window.electronAPI?.setSetting('autoRefreshOrgs', settings.autoRefreshOrgs);
 
-      toast({
-        title: 'Settings Saved',
-        description: 'Application settings have been updated.',
-        variant: 'default'
-      });
-        title: 'Success',
-        description: 'Settings saved successfully',
-        variant: 'default'
-      });
+      toast.success('Settings saved successfully');
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save settings:', error);
-      toast({
-        title: 'Error Saving Settings',
-        description: `Failed to save settings: ${error.message}`,
-        variant: 'destructive'
-      });
-      toast({
-        title: 'Error',
-        description: 'Failed to save settings',
-        variant: 'destructive'
-      });
+      toast.error('Failed to save settings');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSettingChange = (key: keyof typeof settings, value: any) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
   };
 
   const resetSettings = () => {
     setTempDirectory('');
+    setSettings({
+      defaultOrgAlias: '',
+      autoRefreshOrgs: true,
+    });
   };
 
   return (
@@ -214,9 +195,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
           </div>
-        )} {/* End loading check */}
-          </div>
         </div>
+        )}
       </div>
     </Modal>
   );

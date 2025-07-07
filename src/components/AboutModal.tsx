@@ -4,9 +4,10 @@ import { ExternalLink, Heart, Code, Zap, Shield, Users } from 'lucide-react';
 
 interface AboutModalProps {
   isOpen: boolean;
+  onClose: () => void;
 }
 
-export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
+export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
   const [appInfo, setAppInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
 
   const loadAppInfo = async () => {
     try {
-      const info = await window.electronAPI.getAppInfo();
+      const info = await window.electronAPI?.getAppInfo();
       setAppInfo(info);
     } catch (error) {
       console.error('Failed to load app info:', error);
@@ -57,7 +58,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
   ];
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="About Salesforce Toolkit" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="About Salesforce Toolkit" size="lg">
       <div className="p-6">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -72,7 +73,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
             <Heart className="w-4 h-4 text-red-500" />
             <span>by</span>
             <button
-              onClick={() => window.electronAPI.openExternal(appInfo?.linkedin || 'https://www.linkedin.com/in/salesforce-technical-architect/')}
+              onClick={() => window.electronAPI?.openExternal(appInfo?.linkedin || 'https://www.linkedin.com/in/salesforce-technical-architect/')}
               className="text-blue-600 hover:text-blue-700 font-medium hover:underline flex items-center gap-1"
             >
               {appInfo?.author || 'Amit Bhardwaj'}
@@ -165,7 +166,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
               For questions, suggestions, or collaboration opportunities:
             </p>
             <button
-              onClick={() => window.electronAPI.openExternal('https://www.linkedin.com/in/salesforce-technical-architect/')}
+              onClick={() => window.electronAPI?.openExternal('https://www.linkedin.com/in/salesforce-technical-architect/')}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200"
             >
               Connect on LinkedIn
